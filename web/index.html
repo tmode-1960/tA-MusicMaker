@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>thomo.ART MusicMaker v0.87 (CodexMundi Edition)</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/style.css?v=12">
+<script>try{const t=localStorage.getItem("tamusicmaker.theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">♪</span> <span class="brand-thomo">thomo.ART</span> <b class="brand-title">MusicMaker</b> <span class="brand-version" id="brandVersion">v0.87</span> <span class="edition">(CodexMundi Edition)</span></div>
+  <div class="status" id="status"><span class="dot"></span><span id="statusText" data-i18n="connecting"></span></div>
+  <div class="spacer"></div>
+  <button class="ghost" id="btnStartComfy" data-i18n="startComfy" hidden></button>
+  <button class="ghost" id="btnSettings" data-i18n="settings"></button>
+</header>
+
+<main>
+  <section class="col left">
+    <div class="card">
+      <h2 data-i18n="mode"></h2>
+      <div class="seg" id="modeSeg">
+        <button data-mode="review" class="active" data-i18n="modeReview"></button>
+        <button data-mode="auto" data-i18n="modeAuto"></button>
+      </div>
+      <p class="hint" id="modeHint"></p>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="brief"></h2>
+      <div id="briefForm" class="form"></div>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="addons"></h2>
+      <label class="check"><input type="checkbox" id="optCover"> <span data-i18n="optCover"></span><span class="tip-icon" data-i18n-tip="tip_cover">?</span></label>
+      <label class="check"><input type="checkbox" id="optStems"> <span data-i18n="optStems"></span><span class="tip-icon" data-i18n-tip="tip_stems">?</span></label>
+      <label class="check"><input type="checkbox" id="optRefine"> <span data-i18n="optRefine"></span><span class="tip-icon" data-i18n-tip="tip_refine">?</span></label>
+      <label class="check"><input type="checkbox" id="optVoiceSwap"> <span data-i18n="optVoiceSwap"></span><span class="tip-icon" data-i18n-tip="tip_voice_swap">?</span></label>
+      <div id="voiceSwapOptions" class="sub-options" hidden>
+        <label class="field"><span class="field-head"><span data-i18n="voiceModel"></span><span class="tip-icon" data-i18n-tip="tip_voice_model">?</span></span>
+          <select id="voiceModelSelect"></select>
+        </label>
+        <div class="row" style="gap:8px">
+          <label class="field" style="flex:1"><span class="field-head"><span data-i18n="voicePitch"></span><span class="tip-icon" data-i18n-tip="tip_voice_pitch">?</span></span>
+            <input type="number" id="voicePitch" value="0" min="-24" max="24" step="1">
+          </label>
+          <label class="field" style="flex:1"><span class="field-head"><span data-i18n="voiceIndexRate"></span><span class="tip-icon" data-i18n-tip="tip_voice_index_rate">?</span></span>
+            <input type="number" id="voiceIndexRate" value="0.75" min="0" max="1" step="0.05">
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="export"></h2>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="expFlac"> FLAC</label>
+        <label class="check"><input type="checkbox" id="expMp3"> MP3</label>
+        <label class="check"><input type="checkbox" id="expWav"> WAV</label>
+        <label class="check"><input type="checkbox" id="expSrt"> <span data-i18n="subtitles"></span></label>
+      </div>
+      <label class="check" style="margin-top:4px"><input type="checkbox" id="expSrtEn" checked> <span data-i18n="subtitlesEn"></span></label>
+      <label class="check" style="margin-top:4px"><input type="checkbox" id="expSheet"> <span data-i18n="sheetMusicPdf"></span><span class="tip-icon" data-i18n-tip="tip_sheet_music">?</span></label>
+      <div id="expSheetBox" class="row" style="gap:8px;margin:4px 0 6px" hidden>
+        <label class="field" style="flex:1"><span data-i18n="sheetMusicFormat"></span>
+          <select id="expSheetFormat">
+            <option value="PDF (A4)">PDF (A4)</option>
+            <option value="PDF (Letter)">PDF (Letter)</option>
+          </select>
+        </label>
+        <label class="field" style="flex:1"><span data-i18n="sheetMusicSize"></span>
+          <select id="expSheetSize">
+            <option value="standard" data-i18n="sheetSizeStandard">standard</option>
+            <option value="smaller" data-i18n="sheetSizeSmaller">smaller</option>
+            <option value="compact" data-i18n="sheetSizeCompact">compact</option>
+            <option value="large" data-i18n="sheetSizeLarge">large</option>
+          </select>
+        </label>
+      </div>
+      <label class="field"><span data-i18n="outFolder"></span><input id="expFolder"></label>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="seeds"></h2>
+      <label class="field"><span class="field-head"><span data-i18n="draftSeed"></span><span class="tip-icon" data-i18n-tip="tip_draft_seed">?</span></span>
+        <div class="row"><input id="draftSeed" type="number"><label class="check small"><input type="checkbox" id="draftSeedRandom"> <span data-i18n="randomize"></span></label></div></label>
+      <label class="field"><span class="field-head"><span data-i18n="planSeed"></span><span class="tip-icon" data-i18n-tip="tip_plan_seed">?</span></span>
+        <div class="row"><input id="planSeed" type="number"><label class="check small"><input type="checkbox" id="planSeedRandom"> <span data-i18n="randomize"></span></label></div></label>
+      <p class="hint" data-i18n="seedHint"></p>
+    </div>
+  </section>
+
+  <section class="col right">
+    <nav class="tabs" id="tabs">
+      <button data-tab="sheet" class="active" data-i18n="tabSheet"></button>
+      <button data-tab="mastering" data-i18n="tabMastering"></button>
+      <button data-tab="player" data-i18n="tabPlayer"></button>
+      <button data-tab="result" data-i18n="tabResult"></button>
+      <button data-tab="history" data-i18n="tabHistory"></button>
+    </nav>
+
+    <div class="tab" id="tab-sheet">
+      <div id="autoBox" class="card" hidden>
+        <h2 data-i18n="batch"></h2>
+        <p class="hint" data-i18n="batchHint"></p>
+        <label class="field"><span data-i18n="songCount"></span><input id="autoCount" type="number" min="1" max="50" value="3"></label>
+      </div>
+      <div id="sheetBox" class="card">
+        <div class="row between">
+          <h2 data-i18n="songSheet"></h2>
+          <span class="hint" id="sheetInfo"></span>
+        </div>
+        <p class="hint" style="margin:0 0 12px" data-i18n="sheetHint"></p>
+
+        <div class="doc-block">
+          <div class="doc-head">
+            <div class="doc-title"><span data-i18n="title"></span> <span class="badge" id="badge-title">auto</span></div>
+            <div class="doc-btns">
+              <button type="button" class="mini" data-doc-auto="title" data-i18n="backToAuto"></button>
+              <button type="button" class="mini" data-doc-manual="title" data-i18n="makeManual"></button>
+            </div>
+          </div>
+          <input id="shTitle">
+        </div>
+
+        <div class="doc-block">
+          <div class="doc-head">
+            <div class="doc-title"><span data-i18n="style"></span> <span class="badge" id="badge-style">auto</span></div>
+            <div class="doc-btns">
+              <button type="button" class="mini" data-doc-auto="style" data-i18n="backToAuto"></button>
+              <button type="button" class="mini" data-doc-manual="style" data-i18n="makeManual"></button>
+            </div>
+          </div>
+          <textarea id="shStyle" rows="2"></textarea>
+        </div>
+
+        <div class="doc-block">
+          <div class="doc-head">
+            <div class="doc-title"><span data-i18n="lyrics"></span> <span class="badge" id="badge-lyrics">auto</span> <em id="lyricCount"></em></div>
+            <div class="doc-btns">
+              <button type="button" class="mini" data-doc-auto="lyrics" data-i18n="backToAuto"></button>
+              <button type="button" class="mini" data-doc-manual="lyrics" data-i18n="useOwnLyrics"></button>
+            </div>
+          </div>
+          <textarea id="shLyrics" rows="16" spellcheck="false" placeholder="[Verse]&#10;…&#10;&#10;[Chorus]&#10;…"></textarea>
+          <div class="tag-bar">
+            <span class="tag-label" data-i18n="sectionTags"></span>
+            <button type="button" class="tag-btn" data-tag="[Intro]">[Intro]</button>
+            <button type="button" class="tag-btn" data-tag="[Verse]">[Verse]</button>
+            <button type="button" class="tag-btn" data-tag="[Pre-Chorus]">[Pre-Chorus]</button>
+            <button type="button" class="tag-btn" data-tag="[Chorus]">[Chorus]</button>
+            <button type="button" class="tag-btn" data-tag="[Bridge]">[Bridge]</button>
+            <button type="button" class="tag-btn" data-tag="[Instrumental]">[Instrumental]</button>
+            <button type="button" class="tag-btn" data-tag="[Outro]">[Outro]</button>
+          </div>
+        </div>
+
+        <details id="artDetails">
+          <summary><span data-i18n="coverPrompt"></span> <span class="badge" id="badge-artwork_prompt">auto</span></summary>
+          <div class="doc-block" style="margin-top:6px">
+            <div class="doc-head">
+              <div></div>
+              <div class="doc-btns">
+                <button type="button" class="mini" data-doc-auto="artwork_prompt" data-i18n="backToAuto"></button>
+                <button type="button" class="mini" data-doc-manual="artwork_prompt" data-i18n="makeManual"></button>
+              </div>
+            </div>
+            <textarea id="shArt" rows="3"></textarea>
+          </div>
+        </details>
+      </div>
+      <div class="actions">
+        <button id="btnDraft" class="primary" data-i18n="btnDraft"></button>
+        <button id="btnRender" class="accent" data-i18n="btnRender"></button>
+        <button id="btnAuto" class="accent" data-i18n="btnAuto" hidden></button>
+      </div>
+    </div>
+
+    <div class="tab" id="tab-mastering" hidden>
+      <div class="card">
+        <div class="row between">
+          <h2 data-i18n="mstTitle"></h2>
+          <button type="button" class="mini" id="btnResetMastering" data-i18n="mstReset"></button>
+        </div>
+        <p class="hint" style="margin:0 0 10px" data-i18n="mstIntro"></p>
+        <label class="check"><input type="checkbox" id="mstEnabled" checked> <span data-i18n="mstEnable"></span><span class="tip-icon" data-i18n-tip="tip_mst_enable">?</span></label>
+      </div>
+
+      <div id="mstBody">
+        <div class="card">
+          <h2 data-i18n="hqTitle"></h2>
+          <p class="hint" style="margin:0 0 10px" data-i18n="hqIntro"></p>
+          <div class="form">
+            <label class="check"><input type="checkbox" id="hqStereoEnabled" checked> <span data-i18n="hqStereoEnable"></span><span class="tip-icon" data-i18n-tip="tip_hq_stereo">?</span></label>
+            <div id="hqStereoBody" class="sub-options">
+              <label class="field">
+                <span class="field-head"><span data-i18n="hqPreset"></span></span>
+                <select id="hqStereoPreset">
+                  <option value="auto - from the song's genre" data-i18n="hqPresetAuto">auto - from the song's genre</option>
+                  <option value="standard - pop, hip-hop, soul, world">standard - pop, hip-hop, soul, world</option>
+                  <option value="gentle - classical, jazz, folk">gentle - classical, jazz, folk</option>
+                  <option value="strong - rock, metal, punk">strong - rock, metal, punk</option>
+                  <option value="wide - electronic, dance, ambient">wide - electronic, dance, ambient</option>
+                  <option value="custom - the fields below" data-i18n="mstCustomOpt">custom - the fields below</option>
+                </select>
+              </label>
+              <div id="hqStereoCustomBox" class="row" style="gap:10px;margin-top:8px" hidden>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="hqSideHighcut"></span></span>
+                  <input type="number" id="hqStereoHighcut" value="10500" min="4000" max="20000" step="250">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="hqSideCleanup"></span></span>
+                  <input type="number" id="hqStereoCleanup" value="0.65" min="0" max="1" step="0.05">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="hqWarmth"></span></span>
+                  <input type="number" id="hqStereoWarmth" value="0.18" min="0" max="0.8" step="0.02">
+                </label>
+              </div>
+            </div>
+
+            <label class="check" style="margin-top:6px"><input type="checkbox" id="hqRegenEnabled"> <span data-i18n="hqRegenEnable"></span><span class="tip-icon" data-i18n-tip="tip_hq_regen">?</span></label>
+            <div id="hqRegenBody" class="sub-options" hidden>
+              <div class="row" style="gap:10px">
+                <label class="field" style="flex:2">
+                  <span class="field-head"><span data-i18n="hqPreset"></span></span>
+                  <select id="hqRegenPreset">
+                    <option value="auto - from the song's genre" data-i18n="hqPresetAuto">auto - from the song's genre</option>
+                    <option value="standard - pop, hip-hop, soul, world">standard - pop, hip-hop, soul, world</option>
+                    <option value="gentle - classical, jazz, folk">gentle - classical, jazz, folk</option>
+                    <option value="strong - rock, metal, punk">strong - rock, metal, punk</option>
+                    <option value="wide - electronic, dance, ambient">wide - electronic, dance, ambient</option>
+                    <option value="custom - the fields below" data-i18n="mstCustomOpt">custom - the fields below</option>
+                  </select>
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="hqModelSteps"></span></span>
+                  <input type="number" id="hqRegenSteps" value="4" min="2" max="8" step="1">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="refSeed"></span></span>
+                  <input type="number" id="hqRegenSeed" value="0" min="0" max="4294967295" step="1">
+                </label>
+              </div>
+              <div id="hqRegenCustomBox" class="row" style="gap:10px;margin-top:8px" hidden>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="hqFromHz"></span></span>
+                  <input type="number" id="hqRegenFromHz" value="8200" min="4500" max="20000" step="100">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="hqNewShare"></span></span>
+                  <input type="number" id="hqRegenNewShare" value="0.85" min="0" max="1" step="0.05">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="hqLevelMatch"></span></span>
+                  <input type="number" id="hqRegenLevelMatch" value="0.90" min="0.3" max="1.5" step="0.05">
+                </label>
+              </div>
+            </div>
+
+            <label class="check" style="margin-top:6px"><input type="checkbox" id="hqDereverbEnabled"> <span data-i18n="hqDereverbEnable"></span><span class="tip-icon" data-i18n-tip="tip_hq_dereverb">?</span></label>
+            <div id="hqDereverbBody" class="sub-options" hidden>
+              <label class="field">
+                <span class="field-head"><span data-i18n="hqPreset"></span></span>
+                <select id="hqDereverbPreset">
+                  <option value="auto - from the song's genre" data-i18n="hqPresetAuto">auto - from the song's genre</option>
+                  <option value="standard - pop, hip-hop, soul, world">standard - pop, hip-hop, soul, world</option>
+                  <option value="gentle - classical, jazz, folk">gentle - classical, jazz, folk</option>
+                  <option value="strong - rock, metal, punk">strong - rock, metal, punk</option>
+                  <option value="wide - electronic, dance, ambient">wide - electronic, dance, ambient</option>
+                  <option value="custom - the fields below" data-i18n="mstCustomOpt">custom - the fields below</option>
+                </select>
+              </label>
+              <div id="hqDereverbCustomBox" class="row" style="gap:10px;margin-top:8px" hidden>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="hqDereverbAmount"></span></span>
+                  <input type="number" id="hqDereverbAmount" value="0.35" min="0" max="1" step="0.05">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="hqPhaseLock"></span></span>
+                  <input type="number" id="hqDereverbPhaseLock" value="0.35" min="0" max="1" step="0.05">
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="mstEqTitle"></h2>
+          <div class="form">
+            <label class="field">
+              <span class="field-head"><span data-i18n="mstEqMode"></span><span class="tip-icon" data-i18n-tip="tip_mst_eq_mode">?</span></span>
+              <select id="mstEqMode">
+                <option value="match preset" data-i18n="mstEqModePreset">match preset</option>
+                <option value="flat" data-i18n="mstEqModeFlat">flat</option>
+                <option value="custom match" data-i18n="mstEqModeCustom">custom match</option>
+              </select>
+            </label>
+            <div id="mstEqPresetBox">
+              <label class="field">
+                <span class="field-head"><span data-i18n="mstEqPreset"></span><span class="tip-icon" data-i18n-tip="tip_mst_eq_preset">?</span></span>
+                <select id="mstEqPreset">
+                  <option value="Warm - gentle (workflow default)">Warm - gentle (workflow default)</option>
+                  <option value="Warm - subtle mastering">Warm - subtle mastering</option>
+                  <option value="Warm - rounded mix">Warm - rounded mix</option>
+                  <option value="Warm - upper-mid softening">Warm - upper-mid softening</option>
+                  <option value="Bright - subtle mastering">Bright - subtle mastering</option>
+                  <option value="Bright - gentle clarity">Bright - gentle clarity</option>
+                  <option value="Bright - open mix">Bright - open mix</option>
+                </select>
+              </label>
+            </div>
+            <div id="mstEqCustomBox" class="sub-options" hidden>
+              <div class="row" style="gap:10px">
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstEqTarget"></span><span class="tip-icon" data-i18n-tip="tip_mst_eq_target">?</span></span>
+                  <select id="mstEqTarget">
+                    <option value="warm">warm</option>
+                    <option value="bright">bright</option>
+                  </select>
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstEqStrength"></span><span class="tip-icon" data-i18n-tip="tip_mst_eq_strength">?</span></span>
+                  <input type="number" id="mstEqStrength" value="0.35" min="0" max="1" step="0.05">
+                </label>
+              </div>
+              <div class="row" style="gap:10px;margin-top:8px">
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstEqMaxGain"></span><span class="tip-icon" data-i18n-tip="tip_mst_eq_max_gain">?</span></span>
+                  <input type="number" id="mstEqMaxGain" value="2.0" min="0.1" max="6.0" step="0.1">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstEqMaxBands"></span><span class="tip-icon" data-i18n-tip="tip_mst_eq_max_bands">?</span></span>
+                  <input type="number" id="mstEqMaxBands" value="4" min="1" max="6" step="1">
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="mstLoudTitle"></h2>
+          <div class="form">
+            <label class="field">
+              <span class="field-head"><span data-i18n="mstLoudTarget"></span><span class="tip-icon" data-i18n-tip="tip_mst_loud_target">?</span></span>
+              <select id="mstLoudTarget">
+                <option value="streaming (-14 LUFS, -1 dBTP)">streaming (-14 LUFS, -1 dBTP)</option>
+                <option value="Apple Music / podcasts (-16 LUFS, -1 dBTP)">Apple Music / podcasts (-16 LUFS, -1 dBTP)</option>
+                <option value="dynamic (-18 LUFS, -1 dBTP)">dynamic (-18 LUFS, -1 dBTP)</option>
+                <option value="broadcast EBU R128 (-23 LUFS, -1 dBTP)">broadcast EBU R128 (-23 LUFS, -1 dBTP)</option>
+                <option value="loud (-9 LUFS, -0.5 dBTP)">loud (-9 LUFS, -0.5 dBTP)</option>
+                <option value="custom" data-i18n="mstCustomOpt">custom</option>
+              </select>
+            </label>
+            <div id="mstLoudCustomBox" class="sub-options" hidden>
+              <div class="row" style="gap:10px">
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstCustomLufs"></span><span class="tip-icon" data-i18n-tip="tip_mst_custom_lufs">?</span></span>
+                  <input type="number" id="mstCustomLufs" value="-14.0" min="-30" max="-5" step="0.5">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstCustomCeiling"></span><span class="tip-icon" data-i18n-tip="tip_mst_custom_ceiling">?</span></span>
+                  <input type="number" id="mstCustomCeiling" value="-1.0" min="-12" max="-0.1" step="0.1">
+                </label>
+              </div>
+            </div>
+
+            <label class="field">
+              <span class="field-head"><span data-i18n="mstCompression"></span><span class="tip-icon" data-i18n-tip="tip_mst_compression">?</span></span>
+              <select id="mstCompression">
+                <option value="Balanced - gentle glue">Balanced - gentle glue</option>
+                <option value="off">off</option>
+                <option value="Acoustic - gentle">Acoustic - gentle</option>
+                <option value="Classical - preserve dynamics">Classical - preserve dynamics</option>
+                <option value="Jazz - natural">Jazz - natural</option>
+                <option value="Vocal pop - smooth">Vocal pop - smooth</option>
+                <option value="Pop - punchy">Pop - punchy</option>
+                <option value="Rock - bus glue">Rock - bus glue</option>
+                <option value="Electronic - tight">Electronic - tight</option>
+                <option value="Club - loud">Club - loud</option>
+                <option value="Hip-hop - low-end punch">Hip-hop - low-end punch</option>
+                <option value="Ambient - spacious">Ambient - spacious</option>
+                <option value="Limiter only - transparent">Limiter only - transparent</option>
+                <option value="custom" data-i18n="mstCustomOpt">custom</option>
+              </select>
+            </label>
+            <div id="mstCompCustomBox" class="sub-options" hidden>
+              <div class="row" style="gap:10px">
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstCompThreshold"></span><span class="tip-icon" data-i18n-tip="tip_mst_comp_threshold">?</span></span>
+                  <input type="number" id="mstCompThreshold" value="-18.0" min="-60" max="0" step="0.5">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstCompRatio"></span><span class="tip-icon" data-i18n-tip="tip_mst_comp_ratio">?</span></span>
+                  <input type="number" id="mstCompRatio" value="1.5" min="1.0" max="10.0" step="0.1">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstCompKnee"></span><span class="tip-icon" data-i18n-tip="tip_mst_comp_knee">?</span></span>
+                  <input type="number" id="mstCompKnee" value="6.0" min="0" max="24" step="0.5">
+                </label>
+              </div>
+              <div class="row" style="gap:10px;margin-top:8px">
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstCompAttack"></span><span class="tip-icon" data-i18n-tip="tip_mst_comp_attack">?</span></span>
+                  <input type="number" id="mstCompAttack" value="20" min="1" max="200" step="1">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstCompRelease"></span><span class="tip-icon" data-i18n-tip="tip_mst_comp_release">?</span></span>
+                  <input type="number" id="mstCompRelease" value="150" min="10" max="2000" step="5">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstCompSidechain"></span><span class="tip-icon" data-i18n-tip="tip_mst_comp_sidechain">?</span></span>
+                  <input type="number" id="mstCompSidechain" value="80" min="0" max="500" step="5">
+                </label>
+                <label class="field" style="flex:1">
+                  <span class="field-head"><span data-i18n="mstCompDetector"></span><span class="tip-icon" data-i18n-tip="tip_mst_comp_detector">?</span></span>
+                  <select id="mstCompDetector">
+                    <option value="RMS">RMS</option>
+                    <option value="Peak">Peak</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <label class="field">
+              <span class="field-head"><span data-i18n="mstSampleRate"></span><span class="tip-icon" data-i18n-tip="tip_mst_sample_rate">?</span></span>
+              <select id="mstSampleRate">
+                <option value="keep" data-i18n="mstSrKeep">keep</option>
+                <option value="44100">44100 Hz (CD)</option>
+                <option value="48000">48000 Hz (Studio / Video)</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="refTitle"></h2>
+        <p class="hint" style="margin:0 0 10px" data-i18n="refIntro"></p>
+        <label class="check"><input type="checkbox" id="refEnabled"> <span data-i18n="refEnable"></span><span class="tip-icon" data-i18n-tip="tip_refine">?</span></label>
+        <div id="refBody" class="form" style="margin-top:12px" hidden>
+          <label class="field">
+            <span class="field-head"><span data-i18n="refEngine"></span><span class="tip-icon" data-i18n-tip="tip_ref_engine">?</span></span>
+            <select id="refEngine">
+              <option value="resample only" data-i18n="refEngineResample">resample only</option>
+              <option value="model" data-i18n="refEngineModel">model</option>
+            </select>
+          </label>
+          <div id="refModelBox" class="sub-options" hidden>
+            <label class="field">
+              <span class="field-head"><span data-i18n="refModel"></span><span class="tip-icon" data-i18n-tip="tip_ref_model">?</span></span>
+              <select id="refModel">
+                <option value="pytorch_model.bin">pytorch_model.bin</option>
+              </select>
+            </label>
+            <p class="hint" style="margin:4px 0 0" data-i18n="refModelHint"></p>
+          </div>
+
+          <div class="row" style="gap:10px">
+            <label class="field" style="flex:2">
+              <span class="field-head"><span data-i18n="refPreset"></span><span class="tip-icon" data-i18n-tip="tip_ref_preset">?</span></span>
+              <select id="refPreset">
+                <option value="custom - the three fields below" data-i18n="refPresetCustom">custom - the three fields below</option>
+                <option value="1 - pre 6 kHz / post 16 kHz">1 - pre 6 kHz / post 16 kHz</option>
+                <option value="2 - pre 8 kHz / post 19 kHz">2 - pre 8 kHz / post 19 kHz</option>
+                <option value="3 - MiniMax: pre 10 kHz / post 19 kHz">3 - MiniMax: pre 10 kHz / post 19 kHz</option>
+                <option value="4 - pre 12 kHz / post 19 kHz">4 - pre 12 kHz / post 19 kHz</option>
+                <option value="5 - pre 14 kHz / post 21 kHz">5 - pre 14 kHz / post 21 kHz</option>
+              </select>
+            </label>
+            <label class="field" style="flex:1">
+              <span class="field-head"><span data-i18n="refGain"></span><span class="tip-icon" data-i18n-tip="tip_ref_gain">?</span></span>
+              <input type="number" id="refGain" value="1.0" min="0" max="2" step="0.05">
+            </label>
+          </div>
+
+          <div id="refCustomFreqBox" class="row" style="gap:10px">
+            <label class="field" style="flex:1">
+              <span class="field-head"><span data-i18n="refCrossover"></span><span class="tip-icon" data-i18n-tip="tip_ref_crossover">?</span></span>
+              <input type="number" id="refCrossover" value="0" min="0" max="23000" step="100">
+            </label>
+            <label class="field" style="flex:1">
+              <span class="field-head"><span data-i18n="refPreHz"></span><span class="tip-icon" data-i18n-tip="tip_ref_pre_hz">?</span></span>
+              <input type="number" id="refPreHz" value="0" min="-1" max="23000" step="100">
+            </label>
+            <label class="field" style="flex:1">
+              <span class="field-head"><span data-i18n="refPostHz"></span><span class="tip-icon" data-i18n-tip="tip_ref_post_hz">?</span></span>
+              <input type="number" id="refPostHz" value="0" min="0" max="23900" step="100">
+            </label>
+            <label class="field" style="flex:1">
+              <span class="field-head"><span data-i18n="refSeed"></span><span class="tip-icon" data-i18n-tip="tip_ref_seed">?</span></span>
+              <input type="number" id="refSeed" value="0" min="0" max="4294967295" step="1">
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab" id="tab-player" hidden><div id="playerBox"><p class="empty" data-i18n="playerSelectPrompt"></p></div></div>
+    <div class="tab" id="tab-result" hidden><div id="resultBox"><p class="empty" data-i18n="noResult"></p></div></div>
+    <div class="tab" id="tab-history" hidden><div id="historyBox"></div></div>
+  </section>
+</main>
+
+<div id="progress" class="progress" hidden>
+  <div class="pinfo"><b id="pPhase">…</b><span id="pDetail"></span><span class="spacer"></span><span id="pTime"></span>
+    <button class="ghost danger" id="btnCancel" data-i18n="cancel"></button></div>
+  <div class="bar"><div id="pBar"></div></div>
+</div>
+
+<dialog id="dlgVoiceSwap">
+  <form method="dialog">
+    <h2 data-i18n="swapVoiceTitle"></h2>
+    <p class="hint" id="dlgVoiceSwapSongName" style="margin-bottom:12px;font-weight:600;color:var(--accent2)"></p>
+    <label class="field"><span data-i18n="voiceModel"></span>
+      <select id="dlgVoiceModelSelect"></select>
+    </label>
+    <div class="row" style="gap:8px">
+      <label class="field" style="flex:1"><span data-i18n="voicePitch"></span>
+        <input type="number" id="dlgVoicePitch" value="0" min="-24" max="24" step="1">
+      </label>
+      <label class="field" style="flex:1"><span data-i18n="voiceIndexRate"></span>
+        <input type="number" id="dlgVoiceIndexRate" value="0.75" min="0" max="1" step="0.05">
+      </label>
+    </div>
+    <div class="actions" style="margin-top:14px">
+      <button value="cancel" class="ghost" data-i18n="cancel"></button>
+      <button id="btnStartVoiceSwap" value="ok" class="accent" data-i18n="btnStartVoiceSwap"></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgExportVideo">
+  <form method="dialog" novalidate>
+    <h2 data-i18n="videoExportTitle"></h2>
+    <p class="hint" id="dlgVideoSongTitle" style="margin-bottom:12px;font-weight:600;color:var(--accent2)"></p>
+
+    <div class="field" id="secVideoAudioRange" style="margin-bottom:14px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px">
+      <div class="row between" style="align-items:center;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px">
+          <span>🎵</span>
+          <span data-i18n="videoAudioRangeTitle">Audio-Ausschnitt</span>
+          <span id="badgeVideoAudioDuration" class="badge" style="font-size:11px;padding:2px 8px;font-weight:700;color:var(--accent2);background:rgba(51,214,166,0.15)">Full</span>
+        </div>
+        <div class="row" style="gap:4px">
+          <button type="button" class="ctrl-btn seg-range-btn active" data-range="full" data-i18n="rangeFull">Full</button>
+          <button type="button" class="ctrl-btn seg-range-btn" data-range="15">15s</button>
+          <button type="button" class="ctrl-btn seg-range-btn" data-range="30">30s</button>
+          <button type="button" class="ctrl-btn seg-range-btn" data-range="60">60s</button>
+        </div>
+      </div>
+
+      <!-- Interactive Waveform Container -->
+      <div id="videoWaveformWrap" style="position:relative;width:100%;height:78px;background:#0d0f17;border:1px solid var(--line);border-radius:8px;overflow:hidden;user-select:none">
+        <canvas id="videoWaveformCanvas" style="width:100%;height:100%;display:block;cursor:crosshair"></canvas>
+      </div>
+
+      <!-- Time controls below waveform -->
+      <div class="row between" style="align-items:center;margin-top:8px;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <button type="button" id="btnPreviewAudioRange" class="ctrl-btn" style="padding:4px 10px;font-weight:600;display:inline-flex;align-items:center;gap:5px">
+            <span id="icoPreviewAudio">▶</span>
+            <span id="txtPreviewAudio" data-i18n="previewRangePlay">Vorhören</span>
+          </button>
+          <span id="lblAudioRangeInfo" class="hint" style="font-size:11px;font-family:Consolas,monospace;color:var(--text)">0:00.0 - 0:30.0</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--mute)">
+            <span data-i18n="lblRangeStart">Start:</span>
+            <input type="number" id="inpAudioRangeStart" value="0.0" step="any" min="0" style="width:68px;padding:3px 6px;font-size:12px;font-family:Consolas,monospace">
+            <span>s</span>
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--mute)">
+            <span data-i18n="lblRangeDuration">Dauer:</span>
+            <input type="number" id="inpAudioRangeDuration" value="0.0" step="any" min="0.5" style="width:68px;padding:3px 6px;font-size:12px;font-family:Consolas,monospace">
+            <span>s</span>
+          </label>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:5px;font-size:11px;color:var(--mute)" data-i18n="videoAudioRangeHint">
+        Mit der Maus auf der Wellenform ziehen, Ränder verschieben oder gesamten Block bewegen.
+      </div>
+    </div>
+
+    <label class="field">
+      <span data-i18n="videoAspect"></span>
+      <select id="selVideoAspect">
+        <option value="16:9" data-i18n="videoAspect16_9"></option>
+        <option value="9:16" data-i18n="videoAspect9_16"></option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span data-i18n="videoStyle"></span>
+      <select id="selVideoStyle">
+        <option value="retro" data-i18n="visStyleRetro"></option>
+        <option value="stars" data-i18n="visStyleStars"></option>
+        <option value="radial" data-i18n="visStyleRadial"></option>
+        <option value="bars" data-i18n="visStyleBars"></option>
+        <option value="scope" data-i18n="visStyleScope"></option>
+        <option value="blur" data-i18n="visStyleBlur"></option>
+        <option value="custom" data-i18n="visStyleCustom"></option>
+        <option value="custom_image" data-i18n="visStyleCustomImage"></option>
+      </select>
+    </label>
+
+    <div id="rowExportCustomVideo" class="field" hidden style="margin-top:-4px">
+      <span data-i18n="customVideoLabel"></span>
+      <div class="row" style="gap:8px;align-items:center;margin-top:4px">
+        <input type="file" id="fileExportCustomVideo" accept="video/mp4,video/webm,video/quicktime,video/x-matroska" style="display:none">
+        <button type="button" id="btnChooseExportVideo" class="ctrl-btn" style="padding:5px 12px">📁 <span data-i18n="btnChooseVideo"></span></button>
+        <span id="txtExportVideoName" class="hint" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"></span>
+        <button type="button" id="btnClearExportVideo" class="ctrl-btn" style="padding:4px 8px;display:none" title="Remove">✕</button>
+      </div>
+      <label class="field" style="margin-top:10px">
+        <span data-i18n="videoDurationMode"></span>
+        <select id="selVideoDurationMode">
+          <option value="audio" data-i18n="durationModeAudio"></option>
+          <option value="video" data-i18n="durationModeVideo"></option>
+        </select>
+      </label>
+    </div>
+
+    <div id="rowExportCustomImage" class="field" hidden style="margin-top:-4px">
+      <span data-i18n="customImageLabel"></span>
+      <div class="row" style="gap:8px;align-items:center;margin-top:4px">
+        <input type="file" id="fileExportCustomImage" accept="image/png,image/jpeg,image/webp,image/jpg" style="display:none">
+        <button type="button" id="btnChooseExportImage" class="ctrl-btn" style="padding:5px 12px">🖼️ <span data-i18n="btnChooseImage"></span></button>
+        <span id="txtExportImageName" class="hint" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"></span>
+        <button type="button" id="btnClearExportImage" class="ctrl-btn" style="padding:4px 8px;display:none" title="Remove">✕</button>
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:6px;margin-bottom:6px">
+      <label class="check" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+        <input type="checkbox" id="chkVideoIncludeSubtitles" checked style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer">
+        <span style="font-weight:600" data-i18n="videoIncludeSubtitles"></span>
+      </label>
+      <div id="videoNoSubtitlesHint" class="hint" hidden style="margin-top:4px;color:var(--mute)" data-i18n="videoNoSubtitlesNotice"></div>
+    </div>
+
+    <label class="field" id="fieldVideoSubtitleFont">
+      <span data-i18n="videoSubtitleFont"></span>
+      <div style="position:relative;width:100%">
+        <input type="text" id="inpVideoSubtitleFont" list="listVideoFonts" autocomplete="off" placeholder="z. B. Impact oder Arial" style="width:100%">
+        <datalist id="listVideoFonts"></datalist>
+      </div>
+      <div id="videoFontPreview" style="margin-top:6px;padding:8px 12px;background:rgba(0,0,0,0.35);border:1px solid var(--line);border-radius:6px;font-size:16px;font-weight:bold;color:#ffffff;text-align:center;text-shadow:0 0 6px rgba(51,214,166,0.7), 0 2px 4px rgba(0,0,0,0.9);letter-spacing:0.5px" data-i18n="videoSubtitleFontPreview">
+        ♫ Synchronisierte Lyrics Vorschau ♫
+      </div>
+    </label>
+
+    <div id="rowVideoSubtitleTiming" class="field" style="margin-top:-2px">
+      <div class="row" style="gap:12px">
+        <label class="field" style="flex:1;margin:0">
+          <span data-i18n="videoSubtitleOffset"></span>
+          <div class="row" style="align-items:center;gap:6px;margin-top:2px">
+            <input type="number" id="inpVideoSubtitleOffset" value="0.0" step="any" min="-10.0" max="10.0" style="width:100%">
+            <span class="hint" style="white-space:nowrap">s</span>
+          </div>
+        </label>
+        <label class="field" style="flex:1;margin:0">
+          <span data-i18n="videoSubtitleSpeed"></span>
+          <div class="row" style="align-items:center;gap:6px;margin-top:2px">
+            <input type="number" id="inpVideoSubtitleSpeed" value="100" step="1" min="70" max="130" style="width:100%">
+            <span class="hint" style="white-space:nowrap">%</span>
+          </div>
+        </label>
+      </div>
+      <div class="hint" style="margin-top:2px;font-size:11px" data-i18n="videoSubtitleTimingHint"></div>
+    </div>
+
+    <label class="field" id="fieldVideoEngine">
+      <span data-i18n="videoEngine"></span>
+      <select id="selVideoEngine">
+        <option value="server" id="optEngineServer" data-i18n="videoEngineServer"></option>
+        <option value="browser" id="optEngineBrowser" data-i18n="videoEngineBrowser"></option>
+      </select>
+    </label>
+    <div id="videoEngineNotice" class="hint" style="margin-top:-4px;margin-bottom:8px"></div>
+
+    <div id="videoRenderProgress" hidden style="margin-top:14px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px">
+      <div class="row between"><b data-i18n="videoRendering"></b><span id="videoRenderStatus" class="hint">…</span></div>
+      <div class="bar" style="margin-top:6px;height:6px;background:var(--line);border-radius:3px;overflow:hidden">
+        <div id="videoProgressBar" style="width:100%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))"></div>
+      </div>
+    </div>
+
+    <div id="videoResultBox" hidden style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
+      <video id="videoPreview" controls controlsList="nodownload" style="width:100%;border-radius:8px;max-height:220px;background:#000"></video>
+      <a id="btnDownloadVideo" class="primary" style="text-align:center;padding:11px 18px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(124,92,255,0.35);cursor:pointer" data-i18n="videoDownload"></a>
+    </div>
+
+    <div class="actions" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;align-items:center">
+      <button type="button" formnovalidate class="ghost" id="btnCancelVideoDlg" data-i18n="cancel"></button>
+      <button type="button" id="btnStartRenderVideo" class="primary" data-i18n="btnStartRenderVideo"></button>
+      <a id="btnSaveVideoAction" class="primary" style="text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:600;display:none;align-items:center;gap:6px;cursor:pointer" data-i18n="btnSaveVideo"></a>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="settings">
+  <form method="dialog">
+    <h2 data-i18n="settings"></h2>
+    <label class="field"><span data-i18n="cfgLang"></span><select id="cfgLang"></select></label>
+    <label class="field"><span data-i18n="cfgTheme"></span>
+      <select id="cfgTheme">
+        <option value="dark" data-i18n="themeDark"></option>
+        <option value="light" data-i18n="themeLight"></option>
+      </select>
+    </label>
+    <label class="field"><span data-i18n="cfgUrl"></span><input id="cfgUrl"></label>
+    <label class="field"><span data-i18n="cfgWorkflow"></span><input id="cfgWorkflow"></label>
+    <label class="field"><span data-i18n="cfgDir"></span><input id="cfgDir"></label>
+    <label class="field"><span data-i18n="cfgCmd"></span><input id="cfgCmd" data-i18n-ph="cfgCmdPh"></label>
+    <label class="field"><span data-i18n="cfgVoiceModelsDir"></span><input id="cfgVoiceModelsDir" data-i18n-ph="cfgVoiceModelsDirPh"></label>
+
+    <div class="settings-credits-box" style="margin-top:14px;padding:12px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:8px">
+      <div style="font-weight:700;font-size:13px;color:var(--text);display:flex;align-items:center;gap:6px">
+        <span data-i18n="creditsTitle"></span>
+      </div>
+      <div style="font-size:12px;color:var(--mute);margin-top:6px;line-height:1.45" data-i18n="creditsText">
+        I would like to thank CodexMundi for their support and for testing the app.
+      </div>
+      <div style="font-size:11px;color:var(--accent2);margin-top:6px;font-weight:600">
+        © 2026 thomo.ART • MusicMaker • CodexMundi Edition
+      </div>
+    </div>
+
+    <div class="actions"><button value="cancel" class="ghost" data-i18n="cancel"></button><button id="cfgSave" value="ok" class="primary" data-i18n="save"></button></div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/i18n.js?v=12"></script>
+<script src="/app.js?v=12"></script>
+</body>
+</html>

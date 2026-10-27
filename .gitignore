@@ -1,0 +1,26 @@
+# Build and Distribution
+dist/
+build/
+bin/
+*.spec
+*.exe
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Local User Data, Media & Models
+data/
+media/
+models/
+scratch/
+mock_last_prompt.json
+
+# Backups & Temp
+_backups/
+.vscode/
+.idea/
+*.tmp
