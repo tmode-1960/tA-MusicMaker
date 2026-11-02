@@ -1,8 +1,8 @@
 {
   "id": "9636130e-6f72-5b33-a1b9-97c929135bfd",
   "revision": 0,
-  "last_node_id": 24,
-  "last_link_id": 71,
+  "last_node_id": 26,
+  "last_link_id": 73,
   "nodes": [
     {
       "id": 1,
@@ -25,7 +25,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "# 1 · YuE2 · Song\n\n**Brief -> Write Song -> Song Sheet · Text -> YuE2 Plan -> Arrange -> Song Sheet · Score -> YuE2 Render -> Master -> Export**\n\n1. Choose the **mode** in **Song Brief**:\n   - *new song every run* - every run writes and renders a **different song** from the brief, without stops (set the **Draft seed** to 🎲 *new seed* for even more variety). For a series, set the batch count next to **Run** (App mode: *Number of runs*) - one click, many songs.\n   - *one song, stop to review* - the run **stops at the Song Sheets (Text, then Score)**: open it, check or edit the documents, *Approve*, run again. Once approved, every further run is a **new take** of the same song (the documents stay cached).\n2. Describe the song (or pick a template). *vocals* switches between a sung song and an instrumental; *length* runs from 1:00 to 6:00.\n3. Press **Run**. The writer model drafts title, style and lyrics; YuE2 plans a score and renders the song.\n\n**Inspect and edit:** open a **Song Sheet** to see exactly what YuE2 receives. Edit a document there; your edit wins until its draft changes, then the run stops and asks you. The sheets' *review* follows the brief's mode (*as the brief says*); set it to *continue* or *stop for review* to decide per sheet.\n\n**Creative modes (experimental):** *arrangement* in the brief. They can give unexpected results and are meant for experimenting - try a mode, listen, keep what you like. *off* (default, the dependable choice): no arrangement - YuE2 plans melody, chords and instruments by itself, as before. A creative mode - from *standard*, *sterile* and *unplugged* over *call and response*, *signature motif*, *hypnotic* and *breakdown* to *jazz colours* and *fantasy* (the line under the brief says what the chosen one does), *key change* for one lift of the final chorus, or your own file in `user/plenio/arrangement` - adds its hints to the writing and lets the writer model plan every section of the score in **Arrange**: chords, what the instrument line plays, energy. *genre closeness* sets how free it may be: 100 strictly typical, 70 typical with personal touches, 40 free within the genre, 0 any style. The writer answers with a small plan, never notes: Plenio writes every note itself and checks the result, so the score stays valid - a plan it cannot use leaves the score as it was, and Song Sheet · Score says so. A **harmony guard** keeps every chord in the key and the genre and on the melody, and the instrument line plays where the voice rests (*lines under the singing* in the brief lets it sound under the voice, calmly). **Arrangement seed:** another arrangement of the same song. Changing the mode or a slider writes the text again (the brief changed); a Local LLM answers from its cache when the request is the same.\n\n**Writer model:** one list in the *Writer model* node - at the start, under the two cards - for every writing step (Write Song and Arrange): ComfyUI's text models (Gemma 4 E4B by default) and every local LLM - GGUF files in `models/LLM`, LM Studio, Ollama ... Only the chosen one is loaded. Local LLM answers are kept: the same request with the same seed is answered from Plenio's cache, without asking the model again.\n\n**Where the run stands:** a badge above each Plenio node shows its result - ✓ done, ⚠ warning, ✖ error; every Song Sheet that will stop carries ⏸ *review stop* before the run, ⏸ *waiting for your approval* (and an amber frame) when the run stopped there, ✓ *approved* once you approved it. A new run clears the badges, so they show how far this run got.\n\n**Creativity** (the brief's slider): 0 steady, 50 the reference - exactly as before -, 100 experimental. It shapes the writer's rules and the temperature of its draft (and of a creative mode's plan) and, with YuE2, how freely the plan and the takes are sampled. More surprises also bring more misses: try a few seeds. A workflow saved before the slider keeps 50.\n\n**Lyrics fidelity** (the brief's last field): a music model does not always sing its lyrics - it leaves a line out, repeats one, sings other words. *standard* renders one take. *high - best of 2 takes* renders a second take (the next seed) when the first sang less than 96 % of the words as written, and **Best Take** keeps the one that sings more of the lyrics, as the lyrics ASR hears it; *highest - best of 3 takes* adds a third take when neither reached 96 %. A take of 96 % is close enough: the run goes on with it at once. Higher fidelity makes the generation take **longer** - up to about twice (high) or three times (highest). Best Take's summary and the release record say what each take sang and which one was kept.\n\n**Seeds:** each seed node has one switch - **🔒 same seed**: the next run keeps that part (the same draft, the same take), so you can change other things; **🎲 new seed**: every run draws a new number - something new each time. The number shown is always the one the last run used: liked a take? Switch its seed to 🔒. Blue nodes keep, amber nodes renew. The seeds follow the brief's **mode**: *new song (cover) every run* starts with every seed on 🎲, *one song (cover), stop to review* with the song's seeds on 🔒 and the take seed on 🎲 - switching the mode switches them (a toast says so).\n\n**Finish:** *Plenio · Master* mixes the stems when you switch *stems* on, refines the take (*Audio HQ*, below) and brings it to -14 LUFS / -1 dBTP with a gentle tone match (open the block to change a stage, the EQ or the loudness target). Export writes the mastered FLAC 24-bit, the unmastered take as `(original).flac` and a release record to `output/plenio` - in the YuE2 templates also the **sheet music** with the lyrics as `<name>.pdf` (*sheet music* in Export: A4, Letter or off; *sheet music size*: standard about 3 bars a line, smaller, compact or large; this page draws it right after the export), and the lyrics as **subtitles** - `<name> (lines).srt` and `<name> (notes).srt`, timed by listening. The **tags** take the brief's fields as variables (`{genre}`, `{mood}` ...); the *Tags & variables* note beside Export lists them all.\n\n**Cover art (on):** *Cover Art* (the COVER ART group above the render) paints a cover from the sheet's artwork prompt with FLUX.2 Klein 4B (about 16 GB of model files, Apache-2.0); Export embeds it in the FLAC and MP3 files and saves it as `.jpg`. The **Cover Art** card in *HQ Mastering & Cover Art* at the top switches it off - its three nodes are then bypassed and no image model loads.\n\n**Stems (in the Master block, off):** switch *stems* on the *Plenio · Master* node on: *Separate Stems* splits the take into vocals, drums, bass and other, and the *Stem Mixer* - inside the block, open it with the icon at the top right of the node - balances them (gain, mute/solo, compression, reverb/delay sends, muted time ranges) and mixes the residual *rest* along, so a neutral mix returns the render unchanged. Off, the separation does not run. It needs the BS-RoFormer checkpoint (527 MB). The user guide *Stems* covers it.\n\n**HQ Mastering & Cover Art** (the two cards at the top - click one to switch it): **HQ Mastering** (**off** by default) runs the mastering at its highest quality - it can clearly reduce AI shimmer and artifacts, but the song takes **about twice as long** (UniverSR, 229 MB in `models/audio_sr`, needed only then); **Cover Art** (**on**) paints the song's cover.\n\n**Audio HQ (in the Master block, before the EQ):** *HQ 1 · Stereo Cleanup* calms the unsteady stereo shimmer in the render's highs (always); *HQ 2 · Regenerate Highs*, with HQ mastering on, lets the UniverSR model generate new highs above 8.2 kHz - in every preset - and blends them in at the original's level, about 1.5 s per second of music on an RTX 5060 Ti (its *model steps* 3: about 1.1 s); *HQ 3 · De-Reverb* (bypassed) dries the short metallic room but also dulls the highs. Their presets are on **auto**: the brief's genre picks *standard*, *gentle* (classical, jazz, folk), *strong* (rock, metal, punk) or *wide* (electronic, dance, ambient). Open the block (the icon at the top right of the node) to choose another preset or to bypass a stage (**Ctrl+B**). The user guide *Audio HQ* covers it.\n\n**App mode:** switch *Graph / App* at the top left for a simple form: the mode, the brief with its creative mode, closeness and creativity, the writer model, the seeds, the Song Sheet buttons (review and edit, also in the app - their status line says where the run stands: *stops here for review*, *waiting for your approval*, *approved*) and the results. *Number of runs* next to Run renders a series.\n\n**Models** (ComfyUI offers the downloads when you open the template): YuE2 3B int8 (4.0 GB), the Gemma 4 E4B writer. YuE2 weights are **CC BY-NC 4.0 (non-commercial)**. The model block below is collapsed; expand it to choose other files.\n"
+        "# 1 \u00b7 YuE2 \u00b7 Song\n\n**Brief -> Write Song -> Song Sheet \u00b7 Text -> YuE2 Plan -> Arrange -> Song Sheet \u00b7 Score -> YuE2 Render -> Master -> Export**\n\n1. Choose the **mode** in **Song Brief**:\n   - *new song every run* - every run writes and renders a **different song** from the brief, without stops (set the **Draft seed** to \ud83c\udfb2 *new seed* for even more variety). For a series, set the batch count next to **Run** (App mode: *Number of runs*) - one click, many songs.\n   - *one song, stop to review* - the run **stops at the Song Sheets (Text, then Score)**: open it, check or edit the documents, *Approve*, run again. Once approved, every further run is a **new take** of the same song (the documents stay cached).\n2. Describe the song (or pick a template). *vocals* switches between a sung song and an instrumental; *length* runs from 1:00 to 6:00.\n3. Press **Run**. The writer model drafts title, style and lyrics; YuE2 plans a score and renders the song.\n\n**Inspect and edit:** open a **Song Sheet** to see exactly what YuE2 receives. Edit a document there; your edit wins until its draft changes, then the run stops and asks you. The sheets' *review* follows the brief's mode (*as the brief says*); set it to *continue* or *stop for review* to decide per sheet.\n\n**Creative modes (experimental):** *arrangement* in the brief. They can give unexpected results and are meant for experimenting - try a mode, listen, keep what you like. *off* (default, the dependable choice): no arrangement - YuE2 plans melody, chords and instruments by itself, as before. A creative mode - from *standard*, *sterile* and *unplugged* over *call and response*, *signature motif*, *hypnotic* and *breakdown* to *jazz colours* and *fantasy* (the line under the brief says what the chosen one does), *key change* for one lift of the final chorus, or your own file in `user/plenio/arrangement` - adds its hints to the writing and lets the writer model plan every section of the score in **Arrange**: chords, what the instrument line plays, energy. *genre closeness* sets how free it may be: 100 strictly typical, 70 typical with personal touches, 40 free within the genre, 0 any style. The writer answers with a small plan, never notes: Plenio writes every note itself and checks the result, so the score stays valid - a plan it cannot use leaves the score as it was, and Song Sheet \u00b7 Score says so. A **harmony guard** keeps every chord in the key and the genre and on the melody, and the instrument line plays where the voice rests (*lines under the singing* in the brief lets it sound under the voice, calmly). **Arrangement seed:** another arrangement of the same song. Changing the mode or a slider writes the text again (the brief changed); a Local LLM answers from its cache when the request is the same.\n\n**Writer model:** one list in the *Writer model* node - at the start, under the two cards - for every writing step (Write Song and Arrange): ComfyUI's text models (Gemma 4 E4B by default) and every local LLM - GGUF files in `models/LLM`, LM Studio, Ollama ... Only the chosen one is loaded. Local LLM answers are kept: the same request with the same seed is answered from Plenio's cache, without asking the model again.\n\n**Where the run stands:** a badge above each Plenio node shows its result - \u2713 done, \u26a0 warning, \u2716 error; every Song Sheet that will stop carries \u23f8 *review stop* before the run, \u23f8 *waiting for your approval* (and an amber frame) when the run stopped there, \u2713 *approved* once you approved it. A new run clears the badges, so they show how far this run got.\n\n**Creativity** (the brief's slider): 0 steady, 50 the reference - exactly as before -, 100 experimental. It shapes the writer's rules and the temperature of its draft (and of a creative mode's plan) and, with YuE2, how freely the plan and the takes are sampled. More surprises also bring more misses: try a few seeds. A workflow saved before the slider keeps 50.\n\n**Lyrics fidelity** (the brief's last field): a music model does not always sing its lyrics - it leaves a line out, repeats one, sings other words. *standard* renders one take. *high - best of 2 takes* renders a second take (the next seed) when the first sang less than 96 % of the words as written, and **Best Take** keeps the one that sings more of the lyrics, as the lyrics ASR hears it; *highest - best of 3 takes* adds a third take when neither reached 96 %. A take of 96 % is close enough: the run goes on with it at once. Higher fidelity makes the generation take **longer** - up to about twice (high) or three times (highest). Best Take's summary and the release record say what each take sang and which one was kept.\n\n**Seeds:** each seed node has one switch - **\ud83d\udd12 same seed**: the next run keeps that part (the same draft, the same take), so you can change other things; **\ud83c\udfb2 new seed**: every run draws a new number - something new each time. The number shown is always the one the last run used: liked a take? Switch its seed to \ud83d\udd12. Blue nodes keep, amber nodes renew. The seeds follow the brief's **mode**: *new song (cover) every run* starts with every seed on \ud83c\udfb2, *one song (cover), stop to review* with the song's seeds on \ud83d\udd12 and the take seed on \ud83c\udfb2 - switching the mode switches them (a toast says so).\n\n**Finish:** *Plenio \u00b7 Master* mixes the stems when you switch *stems* on, refines the take (*Audio HQ*, below) and brings it to -14 LUFS / -1 dBTP with a gentle tone match (open the block to change a stage, the EQ or the loudness target). Export writes the mastered FLAC 24-bit, the unmastered take as `(original).flac` and a release record to `output/plenio` - in the YuE2 templates also the **sheet music** with the lyrics as `<name>.pdf` (*sheet music* in Export: A4, Letter or off; *sheet music size*: standard about 3 bars a line, smaller, compact or large; this page draws it right after the export), and the lyrics as **subtitles** - `<name> (lines).srt` and `<name> (notes).srt`, timed by listening. The **tags** take the brief's fields as variables (`{genre}`, `{mood}` ...); the *Tags & variables* note beside Export lists them all.\n\n**Cover art (on):** *Cover Art* (the COVER ART group above the render) paints a cover from the sheet's artwork prompt with FLUX.2 Klein 4B (about 16 GB of model files, Apache-2.0); Export embeds it in the FLAC and MP3 files and saves it as `.jpg`. The **Cover Art** card in *HQ Mastering & Cover Art* at the top switches it off - its three nodes are then bypassed and no image model loads.\n\n**Stems (in the Master block, off):** switch *stems* on the *Plenio \u00b7 Master* node on: *Separate Stems* splits the take into vocals, drums, bass and other, and the *Stem Mixer* - inside the block, open it with the icon at the top right of the node - balances them (gain, mute/solo, compression, reverb/delay sends, muted time ranges) and mixes the residual *rest* along, so a neutral mix returns the render unchanged. Off, the separation does not run. It needs the BS-RoFormer checkpoint (527 MB). The user guide *Stems* covers it.\n\n**HQ Mastering & Cover Art** (the two cards at the top - click one to switch it): **HQ Mastering** (**off** by default) runs the mastering at its highest quality - it can clearly reduce AI shimmer and artifacts, but the song takes **about twice as long** (UniverSR, 229 MB in `models/audio_sr`, needed only then); **Cover Art** (**on**) paints the song's cover.\n\n**Audio HQ (in the Master block, before the EQ):** *HQ 1 \u00b7 Stereo Cleanup* calms the unsteady stereo shimmer in the render's highs (always); *HQ 2 \u00b7 Regenerate Highs*, with HQ mastering on, lets the UniverSR model generate new highs above 8.2 kHz - in every preset - and blends them in at the original's level, about 1.5 s per second of music on an RTX 5060 Ti (its *model steps* 3: about 1.1 s); *HQ 3 \u00b7 De-Reverb* (bypassed) dries the short metallic room but also dulls the highs. Their presets are on **auto**: the brief's genre picks *standard*, *gentle* (classical, jazz, folk), *strong* (rock, metal, punk) or *wide* (electronic, dance, ambient). Open the block (the icon at the top right of the node) to choose another preset or to bypass a stage (**Ctrl+B**). The user guide *Audio HQ* covers it.\n\n**App mode:** switch *Graph / App* at the top left for a simple form: the mode, the brief with its creative mode, closeness and creativity, the writer model, the seeds, the Song Sheet buttons (review and edit, also in the app - their status line says where the run stands: *stops here for review*, *waiting for your approval*, *approved*) and the results. *Number of runs* next to Run renders a series.\n\n**Models:** every file, its folder and the files for a smaller or larger graphics card are in the note *Models \u00b7 what goes where* on the left; ComfyUI offers the downloads when you open the template. YuE2 weights are **CC BY-NC 4.0 (non-commercial)**. The model block below is collapsed; expand it to choose other files.\n"
       ]
     },
     {
@@ -37,7 +37,7 @@
       ],
       "size": [
         520,
-        1120
+        1250
       ],
       "flags": {},
       "order": 1,
@@ -139,6 +139,24 @@
           "type": "STRING",
           "widget": {
             "name": "vocals.theme"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "vocals.lyrics_from",
+          "name": "vocals.lyrics_from",
+          "type": "COMBO",
+          "widget": {
+            "name": "vocals.lyrics_from"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "vocals.lyrics",
+          "name": "vocals.lyrics",
+          "type": "STRING",
+          "widget": {
+            "name": "vocals.lyrics"
           },
           "link": null
         },
@@ -350,50 +368,32 @@
       "widgets_values": [
         "new song every run",
         "pop/singer-songwriter-acoustic-vocal",
+        "Honest acoustic singer-songwriter song: fingerpicked or gently strummed acoustic guitar, subtle piano, upright bass and brushed drums entering late, plus a close, unpolished vocal with audible breath. Conversational verses, one quietly devastating refrain, minimal production and lots of space.",
+        "singer-songwriter",
         "",
-        "",
-        "",
-        "",
+        "Laid-back (70-100 BPM)",
         "short (about 1:30)",
         "sung",
+        "English",
+        "whispered & intimate vocal",
+        "self-discovery & growth",
+        "written from the idea below",
+        "Plain-spoken and personal, about a conversation that never happened.",
         "",
-        "",
-        "",
-        "",
-        "",
+        "4/4",
         "off",
         70,
         false,
-        50,
+        100,
         "standard"
-      ],
-      "widgets_values_named": {
-        "mode": "new song every run",
-        "template": "pop/singer-songwriter-acoustic-vocal",
-        "description": "",
-        "genre": "",
-        "mood": "",
-        "tempo": "",
-        "length": "short (about 1:30)",
-        "vocals": "sung",
-        "vocals.language": "",
-        "vocals.voice": "",
-        "vocals.theme": "",
-        "key": "",
-        "meter": "",
-        "arrangement": "off",
-        "genre_closeness": 70,
-        "lines_under_singing": false,
-        "creativity": 50,
-        "lyrics_fidelity": "standard"
-      }
+      ]
     },
     {
       "id": 3,
       "type": "be8d0fd4-8ce7-561b-8778-c59f81c6c6b4",
       "pos": [
         0.0,
-        1836.0
+        1966.0
       ],
       "size": [
         380,
@@ -422,7 +422,7 @@
           "name": "MODEL",
           "type": "MODEL",
           "links": [
-            35
+            72
           ]
         },
         {
@@ -430,8 +430,7 @@
           "name": "CLIP",
           "type": "CLIP",
           "links": [
-            13,
-            36
+            73
           ]
         },
         {
@@ -454,7 +453,7 @@
           ]
         }
       ],
-      "title": "Plenio · YuE2 Model",
+      "title": "Plenio \u00b7 YuE2 Model",
       "properties": {},
       "widgets_values": [
         "yue2_3b_int8_convrot.safetensors"
@@ -588,18 +587,13 @@
           "links": null
         }
       ],
-      "title": "Plenio · Write Song",
+      "title": "Plenio \u00b7 Write Song",
       "properties": {},
       "widgets_values": [
         "gemma4_e4b_it_fp8_scaled.safetensors",
         0,
         false
-      ],
-      "widgets_values_named": {
-        "clip_name": "gemma4_e4b_it_fp8_scaled.safetensors",
-        "sampling_mode.seed": 0,
-        "thinking": false
-      }
+      ]
     },
     {
       "id": 5,
@@ -656,11 +650,7 @@
       "widgets_values": [
         0,
         false
-      ],
-      "widgets_values_named": {
-        "seed": 0,
-        "keep_seed": false
-      }
+      ]
     },
     {
       "id": 6,
@@ -730,10 +720,7 @@
       },
       "widgets_values": [
         "gemma4_e4b_it_fp8_scaled.safetensors"
-      ],
-      "widgets_values_named": {
-        "model": "gemma4_e4b_it_fp8_scaled.safetensors"
-      }
+      ]
     },
     {
       "id": 7,
@@ -867,7 +854,7 @@
         {
           "localized_name": "sheet_state",
           "name": "sheet_state",
-          "label": "Song Sheet · Text",
+          "label": "Song Sheet \u00b7 Text",
           "type": "PLENIO_SHEET_STATE",
           "widget": {
             "name": "sheet_state"
@@ -955,7 +942,7 @@
           ]
         }
       ],
-      "title": "Song Sheet · Text",
+      "title": "Song Sheet \u00b7 Text",
       "color": "#25695f",
       "bgcolor": "#163d38",
       "properties": {
@@ -964,11 +951,7 @@
       "widgets_values": [
         "as the brief says",
         ""
-      ],
-      "widgets_values_named": {
-        "review": "as the brief says",
-        "sheet_state": ""
-      }
+      ]
     },
     {
       "id": 8,
@@ -1074,7 +1057,7 @@
           ]
         }
       ],
-      "title": "Plenio · YuE2 Plan",
+      "title": "Plenio \u00b7 YuE2 Plan",
       "properties": {},
       "widgets_values": [
         null,
@@ -1082,16 +1065,8 @@
         0,
         true,
         "full",
-        50
-      ],
-      "widgets_values_named": {
-        "style": null,
-        "lyrics": null,
-        "seed": 0,
-        "switch": true,
-        "mode": "full",
-        "cfg_scale": 50
-      }
+        100
+      ]
     },
     {
       "id": 9,
@@ -1148,11 +1123,7 @@
       "widgets_values": [
         0,
         false
-      ],
-      "widgets_values_named": {
-        "seed": 0,
-        "keep_seed": false
-      }
+      ]
     },
     {
       "id": 10,
@@ -1318,11 +1289,7 @@
       "widgets_values": [
         "gemma4_e4b_it_fp8_scaled.safetensors",
         0
-      ],
-      "widgets_values_named": {
-        "model": "gemma4_e4b_it_fp8_scaled.safetensors",
-        "seed": 0
-      }
+      ]
     },
     {
       "id": 12,
@@ -1379,11 +1346,7 @@
       "widgets_values": [
         0,
         false
-      ],
-      "widgets_values_named": {
-        "seed": 0,
-        "keep_seed": false
-      }
+      ]
     },
     {
       "id": 13,
@@ -1517,7 +1480,7 @@
         {
           "localized_name": "sheet_state",
           "name": "sheet_state",
-          "label": "Song Sheet · Score",
+          "label": "Song Sheet \u00b7 Score",
           "type": "PLENIO_SHEET_STATE",
           "widget": {
             "name": "sheet_state"
@@ -1595,7 +1558,7 @@
           "links": null
         }
       ],
-      "title": "Song Sheet · Score",
+      "title": "Song Sheet \u00b7 Score",
       "color": "#5b4290",
       "bgcolor": "#2b2244",
       "properties": {
@@ -1604,11 +1567,7 @@
       "widgets_values": [
         "as the brief says",
         ""
-      ],
-      "widgets_values_named": {
-        "review": "as the brief says",
-        "sheet_state": ""
-      }
+      ]
     },
     {
       "id": 14,
@@ -1665,11 +1624,7 @@
       "widgets_values": [
         1,
         false
-      ],
-      "widgets_values_named": {
-        "seed": 1,
-        "keep_seed": false
-      }
+      ]
     },
     {
       "id": 15,
@@ -1804,7 +1759,7 @@
           ]
         }
       ],
-      "title": "Plenio · YuE2 Render",
+      "title": "Plenio \u00b7 YuE2 Render",
       "properties": {},
       "widgets_values": [
         null,
@@ -1813,17 +1768,8 @@
         "full",
         0,
         360.0,
-        50
-      ],
-      "widgets_values_named": {
-        "style": null,
-        "lyrics": null,
-        "abc": "",
-        "mode": "full",
-        "seed": 0,
-        "max_duration": 360.0,
-        "cfg_scale": 50
-      }
+        100
+      ]
     },
     {
       "id": 16,
@@ -1893,7 +1839,7 @@
           ]
         }
       ],
-      "title": "Best Take · lyrics fidelity",
+      "title": "Best Take \u00b7 lyrics fidelity",
       "properties": {
         "Node name for S&R": "PlenioBestTake"
       },
@@ -2030,18 +1976,13 @@
           ]
         }
       ],
-      "title": "Plenio · Master",
+      "title": "Plenio \u00b7 Master",
       "properties": {},
       "widgets_values": [
         false,
         false,
         "keep"
-      ],
-      "widgets_values_named": {
-        "loudness_match": false,
-        "eq_match": false,
-        "sample_rate": "keep"
-      }
+      ]
     },
     {
       "id": 18,
@@ -2088,7 +2029,7 @@
       ],
       "size": [
         440,
-        934
+        958
       ],
       "flags": {},
       "order": 18,
@@ -2404,6 +2345,15 @@
             "name": "lyrics_timing"
           },
           "link": null
+        },
+        {
+          "localized_name": "song_page",
+          "name": "song_page",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "song_page"
+          },
+          "link": null
         }
       ],
       "outputs": [
@@ -2436,7 +2386,7 @@
         "{date}",
         "",
         "{genre}",
-        "[Genre: {genre} · ][Mood: {mood} · ][Language: {language} · ]Powered by Plenio Music Production System / ComfyUI",
+        "[Genre: {genre} \u00b7 ][Mood: {mood} \u00b7 ][Language: {language} \u00b7 ]Powered by Plenio Music Production System / ComfyUI",
         "",
         "",
         "{lyrics}",
@@ -2444,31 +2394,9 @@
         "standard",
         true,
         true,
-        "vocal stem"
-      ],
-      "widgets_values_named": {
-        "folder": "plenio",
-        "naming": "{date} {title}",
-        "collision": "number",
-        "flac": true,
-        "mp3": false,
-        "wav": false,
-        "tags": "tags",
-        "tags.artist": "",
-        "tags.album": "",
-        "tags.date": "{date}",
-        "tags.track": "",
-        "tags.genre": "{genre}",
-        "tags.comment": "[Genre: {genre} · ][Mood: {mood} · ][Language: {language} · ]Powered by Plenio Music Production System / ComfyUI",
-        "tags.album_artist": "",
-        "tags.composer": "",
-        "tags.lyrics": "{lyrics}",
-        "sheet_music": "PDF (A4)",
-        "sheet_music_size": "standard",
-        "project_in_flac": true,
-        "lyrics_srt": true,
-        "lyrics_timing": "vocal stem"
-      }
+        "the song",
+        true
+      ]
     },
     {
       "id": 20,
@@ -2491,7 +2419,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Tags & variables\n\n**Export Release** writes these tags into the FLAC and MP3 files. Every tag field takes text with\n**variables** - or connect any text output to it (drag a link onto the field), such as a field of the brief.\n\n- `{genre}` - the value of a variable\n- `[Mood: {mood} · ]` - shown only when every variable inside has a value\n- `{{` and `}}` - literal braces\n\n**Song:** `{title}` `{lyrics}` `{style}` `{artwork_prompt}` `{duration}` `{bpm}` `{score_key}`\n\n**Brief:** `{description}` `{template}` `{mode}` `{genre}` `{mood}` `{tempo}` `{length}` `{vocals}` `{language}` `{voice}` `{theme}` `{melody}` `{lead_instrument}` `{key}` `{meter}` `{arrangement}` `{genre_closeness}` `{lines_under_singing}` `{harmony}` `{song_flow_closeness}` `{lyrics_closeness}` `{creativity}`\n\n**Run:** `{date}` `{year}` `{time}` `{seed}` `{take_seed}` `{draft_seed}` `{arrangement_seed}`\n\n**Models:** `{model}` `{writer}` · **Plenio:** `{plenio_version}`\n\n**Tags:** `{artist}` `{album}` `{album_artist}` `{composer}` `{track}` (in the file name and the other tags)\n\nExamples - comment: `Genre: {genre}[, mood: {mood}][, sung in {language}]`; album: `{genre} Sessions {year}`;\nfile name: `{artist} - {title}`. A name that is no variable stops the run when you press **Run**, before\nanything renders.\n\n**Subtitles:** *lyrics subtitles (SRT)* (on) writes `<name> (lines).srt` - whole lines - and\n`<name> (notes).srt` - the lines painted on note by note - next to the song, timed by listening: Qwen3-ASR\nhears the words and Qwen3-ForcedAligner times them (4.1 + 1.8 GB, fetched on first use; faster-whisper for a\nlanguage the aligner does not know).\n"
+        "## Tags & variables\n\n**Export Release** writes these tags into the FLAC and MP3 files. Every tag field takes text with\n**variables** - or connect any text output to it (drag a link onto the field), such as a field of the brief.\n\n- `{genre}` - the value of a variable\n- `[Mood: {mood} \u00b7 ]` - shown only when every variable inside has a value\n- `{{` and `}}` - literal braces\n\n**Song:** `{title}` `{lyrics}` `{style}` `{artwork_prompt}` `{duration}` `{bpm}` `{score_key}`\n\n**Brief:** `{description}` `{template}` `{mode}` `{genre}` `{mood}` `{tempo}` `{length}` `{vocals}` `{language}` `{voice}` `{theme}` `{melody}` `{lead_instrument}` `{key}` `{meter}` `{arrangement}` `{genre_closeness}` `{lines_under_singing}` `{harmony}` `{song_flow_closeness}` `{lyrics_closeness}` `{creativity}`\n\n**Run:** `{date}` `{year}` `{time}` `{seed}` `{take_seed}` `{draft_seed}` `{arrangement_seed}`\n\n**Models:** `{model}` `{writer}` \u00b7 **Plenio:** `{plenio_version}`\n\n**Tags:** `{artist}` `{album}` `{album_artist}` `{composer}` `{track}` (in the file name and the other tags)\n\nExamples - comment: `Genre: {genre}[, mood: {mood}][, sung in {language}]`; album: `{genre} Sessions {year}`;\nfile name: `{artist} - {title}`. A name that is no variable stops the run when you press **Run**, before\nanything renders.\n\n**Subtitles:** *lyrics subtitles (SRT)* (on) writes `<name> (lines).srt` - whole lines - and\n`<name> (notes).srt` - the lines painted on note by note - next to the song, timed by listening: Qwen3-ASR\nhears the words and Qwen3-ForcedAligner times them (4.1 + 1.8 GB, fetched on first use; faster-whisper for a\nlanguage the aligner does not know).\n"
       ]
     },
     {
@@ -2559,12 +2487,7 @@
         "",
         0,
         1024
-      ],
-      "widgets_values_named": {
-        "text": "",
-        "noise_seed": 0,
-        "size": 1024
-      }
+      ]
     },
     {
       "id": 22,
@@ -2659,11 +2582,7 @@
       "widgets_values": [
         0,
         false
-      ],
-      "widgets_values_named": {
-        "seed": 0,
-        "keep_seed": false
-      }
+      ]
     },
     {
       "id": 24,
@@ -2706,10 +2625,164 @@
       },
       "widgets_values": [
         false
+      ]
+    },
+    {
+      "id": 25,
+      "type": "PlenioLoras",
+      "pos": [
+        0.0,
+        2046.0
       ],
-      "widgets_values_named": {
-        "hq_mastering": false
-      }
+      "size": [
+        380,
+        430
+      ],
+      "flags": {},
+      "order": 24,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 72
+        },
+        {
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 73
+        },
+        {
+          "localized_name": "lora_1",
+          "name": "lora_1",
+          "type": "COMBO",
+          "widget": {
+            "name": "lora_1"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "strength_1",
+          "name": "strength_1",
+          "type": "FLOAT",
+          "widget": {
+            "name": "strength_1"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "lora_2",
+          "name": "lora_2",
+          "type": "COMBO",
+          "widget": {
+            "name": "lora_2"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "strength_2",
+          "name": "strength_2",
+          "type": "FLOAT",
+          "widget": {
+            "name": "strength_2"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "lora_3",
+          "name": "lora_3",
+          "type": "COMBO",
+          "widget": {
+            "name": "lora_3"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "strength_3",
+          "name": "strength_3",
+          "type": "FLOAT",
+          "widget": {
+            "name": "strength_3"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "lora_4",
+          "name": "lora_4",
+          "type": "COMBO",
+          "widget": {
+            "name": "lora_4"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "strength_4",
+          "name": "strength_4",
+          "type": "FLOAT",
+          "widget": {
+            "name": "strength_4"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "MODEL",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            35
+          ]
+        },
+        {
+          "localized_name": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            13,
+            36
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PlenioLoras"
+      },
+      "widgets_values": [
+        "none",
+        1.0,
+        "none",
+        1.0,
+        "none",
+        1.0,
+        "none",
+        1.0
+      ]
+    },
+    {
+      "id": 26,
+      "type": "MarkdownNote",
+      "pos": [
+        -1120,
+        0
+      ],
+      "size": [
+        520,
+        1500
+      ],
+      "flags": {},
+      "order": 25,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Models \u00b7 what goes where",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "# Models \u00b7 what goes where\n\nWhen the template opens, ComfyUI offers the files it misses (*Missing models*: download them there). By hand: put each file into its folder below - or into a folder of your `extra_model_paths.yaml`. **0 \u00b7 System Check** lists what is there and what is missing.\n\n## Needed\n- [yue2_3b_int8_convrot.safetensors](https://huggingface.co/Comfy-Org/YuE2/resolve/main/checkpoints/yue2_3b_int8_convrot.safetensors) \u00b7 4.0 GB \u00b7 CC BY-NC 4.0  \n  YuE2 3B music model (int8)\n- [gemma4_e4b_it_fp8_scaled.safetensors](https://huggingface.co/Comfy-Org/gemma-4/resolve/main/text_encoders/gemma4_e4b_it_fp8_scaled.safetensors) \u00b7 see the model card \u00b7 Apache-2.0  \n  Gemma 4 E4B writer (title, style or caption, lyrics, artwork prompt)\n- [flux-2-klein-4b.safetensors](https://huggingface.co/Comfy-Org/flux2-klein/resolve/main/split_files/diffusion_models/flux-2-klein-4b.safetensors) \u00b7 7.8 GB \u00b7 Apache-2.0  \n  FLUX.2 Klein 4B image model (distilled, cover art)\n- [qwen_3_4b.safetensors](https://huggingface.co/Comfy-Org/flux2-klein/resolve/main/split_files/text_encoders/qwen_3_4b.safetensors) \u00b7 8.0 GB \u00b7 Apache-2.0  \n  Qwen3 4B text encoder of FLUX.2 Klein\n- [flux2-vae.safetensors](https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors) \u00b7 336 MB \u00b7 Apache-2.0  \n  FLUX.2 image VAE\n\n## Optional\n- [ar_lora_inst_v3abc_comfyui.safetensors](https://huggingface.co/Mothersuperior/YuE2-instrumental-cot-full-loras/resolve/947f2f4b28978b2b6c3e316e6a87925c76bf3c4b/ar_lora_inst_v3abc_comfyui.safetensors) \u00b7 see the model card \u00b7 CC BY-NC 4.0  \n  the instrumental adapter in the model block (bypassed until you switch it on)\n- [pytorch_model.bin](https://huggingface.co/woongzip1/universr-audio/resolve/main/pytorch_model.bin) \u00b7 229 MB \u00b7 CC BY 4.0 (weights); MIT (inference code)  \n  HQ mastering (the *HQ Mastering* card): UniverSR regenerates the highs above 8.2 kHz\n- [model_bs_roformer_ep_17_sdr_9.6568.ckpt](https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v1.0.12/model_bs_roformer_ep_17_sdr_9.6568.ckpt) \u00b7 527 MB \u00b7 MIT (trainer); trained on MUSDB18-HQ, whose dataset terms are research-oriented  \n  stems (the Master's *stems* switch); when it is there, Export Release also hears the lyrics on the vocal stem - their times get more exact\n\n## Where they go\n\n```\n\ud83d\udcc2 ComfyUI/\n\u2514\u2500\u2500 \ud83d\udcc2 models/\n    \u251c\u2500\u2500 \ud83d\udcc2 audio_separation/ (stems, the vocal stem for the lyrics times)\n    \u2502   \u2514\u2500\u2500 model_bs_roformer_ep_17_sdr_9.6568.ckpt\n    \u251c\u2500\u2500 \ud83d\udcc2 audio_sr/ (HQ mastering)\n    \u2502   \u2514\u2500\u2500 pytorch_model.bin\n    \u251c\u2500\u2500 \ud83d\udcc2 checkpoints/\n    \u2502   \u2514\u2500\u2500 yue2_3b_int8_convrot.safetensors\n    \u251c\u2500\u2500 \ud83d\udcc2 diffusion_models/\n    \u2502   \u2514\u2500\u2500 flux-2-klein-4b.safetensors\n    \u251c\u2500\u2500 \ud83d\udcc2 loras/ (the instrumental adapter)\n    \u2502   \u2514\u2500\u2500 ar_lora_inst_v3abc_comfyui.safetensors\n    \u251c\u2500\u2500 \ud83d\udcc2 text_encoders/\n    \u2502   \u251c\u2500\u2500 gemma4_e4b_it_fp8_scaled.safetensors\n    \u2502   \u2514\u2500\u2500 qwen_3_4b.safetensors\n    \u251c\u2500\u2500 \ud83d\udcc2 vae/\n    \u2502   \u2514\u2500\u2500 flux2-vae.safetensors\n    \u2514\u2500\u2500 \ud83d\udcc2 plenio/asr/ (Plenio fetches these)\n        \u251c\u2500\u2500 qwen3-asr-1.7b-hf/\n        \u2514\u2500\u2500 qwen3-forcedaligner-0.6b-hf/\n```\n\nThe lyrics ASR (Qwen3-ASR 1.7B, 4.1 GB, and its aligner, 1.8 GB) times the lyrics subtitles and hears a cover's words: Plenio downloads it into `models/plenio/asr` the first time it is needed. Offline (`PLENIO_OFFLINE=1`) it names the files to place.\n\n**The writer** can also be a GGUF file of your own in `models/LLM` (or LM Studio's folder) or a model of a running LM Studio, Ollama, llama.cpp, vLLM or Jan: choose it in *Writer model*. Only the one chosen is loaded.\n\n## Your graphics card\n\n| Graphics card | Music model | Cover Art |\n|---|---|---|\n| below 8 GB | only with heavy offloading (the int8 model alone is 4 GB): very slow, keep songs short | not practical |\n| 8-12 GB | int8 checkpoint (template default); keep songs short | choose `flux-2-klein-4b-fp8` and the text encoder `qwen_3_4b_fp4_flux2` |\n| 12-16 GB | int8 checkpoint (template default) | fp8 model and fp4 text encoder |\n| 16-24 GB | int8 checkpoint (template default) with the Gemma 4 E4B writer | template defaults (bf16) |\n| 24 GB and more | the bf16 checkpoint `yue2_3b_bf16` (7.8 GB) is possible; int8 stays the faster default | template defaults |\n\nNo graphics card: the music models are not practical on the CPU; 0 \u00b7 System Check and 4 \u00b7 Enhance & Master run on it.\n\n**Files for another card** (choose them in the loader nodes - nothing is switched by itself):\n- instead of `yue2_3b_int8_convrot.safetensors`: [yue2_3b_bf16.safetensors](https://huggingface.co/Comfy-Org/YuE2/resolve/main/checkpoints/yue2_3b_bf16.safetensors) \u00b7 7.8 GB \u00b7 `checkpoints/`\n- instead of `flux-2-klein-4b.safetensors`: [flux-2-klein-4b-fp8.safetensors](https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8/resolve/5b4408e59397a4a37ccb46afe426d8ed86379441/flux-2-klein-4b-fp8.safetensors) \u00b7 4.1 GB \u00b7 `diffusion_models/`\n- instead of `qwen_3_4b.safetensors`: [qwen_3_4b_fp4_flux2.safetensors](https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/5f526678002e43af5551dadb73ce2e8c91b43afe/split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors) \u00b7 3.8 GB \u00b7 `text_encoders/`\n\nLicences: [docs/user/licensing.md](https://github.com/jplenio/Plenio-Music-Production-System/blob/main/docs/user/licensing.md) \u00b7 every file: [docs/user/models.md](https://github.com/jplenio/Plenio-Music-Production-System/blob/main/docs/user/models.md)\n"
+      ]
     }
   ],
   "links": [
@@ -2811,7 +2884,7 @@
     ],
     [
       13,
-      3,
+      25,
       1,
       8,
       0,
@@ -2987,7 +3060,7 @@
     ],
     [
       35,
-      3,
+      25,
       0,
       15,
       0,
@@ -2995,7 +3068,7 @@
     ],
     [
       36,
-      3,
+      25,
       1,
       15,
       1,
@@ -3280,17 +3353,33 @@
       17,
       3,
       "BOOLEAN"
+    ],
+    [
+      72,
+      3,
+      0,
+      25,
+      0,
+      "MODEL"
+    ],
+    [
+      73,
+      3,
+      1,
+      25,
+      1,
+      "CLIP"
     ]
   ],
   "groups": [
     {
       "id": 1,
-      "title": "6 · FINISH",
+      "title": "6 \u00b7 FINISH",
       "bounding": [
         2990,
         -110.0,
         900,
-        1820.0
+        1950.0
       ],
       "color": "#9e4452",
       "font_size": 32,
@@ -3311,12 +3400,12 @@
     },
     {
       "id": 3,
-      "title": "1 · SONG",
+      "title": "1 \u00b7 SONG",
       "bounding": [
         -30,
         -110.0,
         580,
-        1820.0
+        1950.0
       ],
       "color": "#3f789e",
       "font_size": 32,
@@ -3324,12 +3413,12 @@
     },
     {
       "id": 4,
-      "title": "2 · WRITE",
+      "title": "2 \u00b7 WRITE",
       "bounding": [
         590,
         -110.0,
         460,
-        1820.0
+        1950.0
       ],
       "color": "#2f7d6d",
       "font_size": 32,
@@ -3337,12 +3426,12 @@
     },
     {
       "id": 5,
-      "title": "3 · TEXT",
+      "title": "3 \u00b7 TEXT",
       "bounding": [
         1090,
         -110.0,
         480,
-        1820.0
+        1950.0
       ],
       "color": "#557a35",
       "font_size": 32,
@@ -3350,12 +3439,12 @@
     },
     {
       "id": 6,
-      "title": "4 · SCORE",
+      "title": "4 \u00b7 SCORE",
       "bounding": [
         1610,
         -110.0,
         900,
-        1820.0
+        1950.0
       ],
       "color": "#6e4f9e",
       "font_size": 32,
@@ -3363,12 +3452,12 @@
     },
     {
       "id": 7,
-      "title": "5 · RENDER",
+      "title": "5 \u00b7 RENDER",
       "bounding": [
         2550,
         -110.0,
         400,
-        1820.0
+        1950.0
       ],
       "color": "#9a6a2c",
       "font_size": 32,
@@ -3379,9 +3468,9 @@
       "title": "MUSIC MODEL",
       "bounding": [
         -30.0,
-        1750.0,
-        320.0,
-        116.0
+        1880.0,
+        440.0,
+        626.0
       ],
       "color": "#444",
       "font_size": 32,
@@ -3401,7 +3490,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Plenio · YuE2 Model",
+        "name": "Plenio \u00b7 YuE2 Model",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -3763,7 +3852,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Plenio · Write Song",
+        "name": "Plenio \u00b7 Write Song",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -4889,7 +4978,7 @@
             },
             "widgets_values": [
               "writer",
-              50
+              100
             ]
           },
           {
@@ -6638,7 +6727,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Plenio · YuE2 Plan",
+        "name": "Plenio \u00b7 YuE2 Plan",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -7491,7 +7580,7 @@
             },
             "widgets_values": [
               "plan",
-              50
+              100
             ]
           }
         ],
@@ -7745,7 +7834,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Plenio · Arrange",
+        "name": "Plenio \u00b7 Arrange",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -8837,7 +8926,7 @@
             },
             "widgets_values": [
               "arrangement",
-              50
+              100
             ]
           },
           {
@@ -9783,7 +9872,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Plenio · YuE2 Render",
+        "name": "Plenio \u00b7 YuE2 Render",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -10486,7 +10575,7 @@
             },
             "widgets_values": [
               "take",
-              50
+              100
             ]
           },
           {
@@ -11980,7 +12069,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Plenio · Master",
+        "name": "Plenio \u00b7 Master",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -12462,7 +12551,7 @@
                 ]
               }
             ],
-            "title": "HQ 3 · De-Reverb (optional)",
+            "title": "HQ 3 \u00b7 De-Reverb (optional)",
             "properties": {
               "Node name for S&R": "PlenioHQDeReverb"
             },
@@ -12838,7 +12927,7 @@
                 ]
               }
             ],
-            "title": "Stems on: the mix · off: the song",
+            "title": "Stems on: the mix \u00b7 off: the song",
             "properties": {
               "Node name for S&R": "ComfySwitchNode"
             },
@@ -13246,7 +13335,7 @@
         ],
         "extra": {},
         "category": "Plenio/Mastering",
-        "description": "Finishes a song: Stems (with the block's stems switch on: Separate Stems and the Stem Mixer, set the mix inside the block) - Audio HQ: HQ 1 · Stereo Cleanup runs, HQ 2 · Regenerate Highs (UniverSR) with HQ mastering on (fewer AI shimmer and artifacts, about twice the time), HQ 3 · De-Reverb is bypassed; their presets follow the brief's genre - then a gentle tone match (EQ) and loudness for streaming (-14 LUFS, -1 dBTP true peak) with gentle compression. Open the block to mix the stems, change a preset, bypass a stage (Ctrl+B), the EQ curve or the compression style."
+        "description": "Finishes a song: Stems (with the block's stems switch on: Separate Stems and the Stem Mixer, set the mix inside the block) - Audio HQ: HQ 1 \u00b7 Stereo Cleanup runs, HQ 2 \u00b7 Regenerate Highs (UniverSR) with HQ mastering on (fewer AI shimmer and artifacts, about twice the time), HQ 3 \u00b7 De-Reverb is bypassed; their presets follow the brief's genre - then a gentle tone match (EQ) and loudness for streaming (-14 LUFS, -1 dBTP true peak) with gentle compression. Open the block to mix the stems, change a preset, bypass a stage (Ctrl+B), the EQ curve or the compression style."
       },
       {
         "id": "9dbb5617-ccf9-5537-b674-405adb29958c",
@@ -13259,7 +13348,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Plenio · Cover Art",
+        "name": "Plenio \u00b7 Cover Art",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -14147,7 +14236,7 @@
     "ds": {
       "scale": 0.7,
       "offset": [
-        640,
+        1180,
         520
       ]
     },
@@ -14212,6 +14301,14 @@
         [
           2,
           "vocals.theme"
+        ],
+        [
+          2,
+          "vocals.lyrics_from"
+        ],
+        [
+          2,
+          "vocals.lyrics"
         ],
         [
           2,

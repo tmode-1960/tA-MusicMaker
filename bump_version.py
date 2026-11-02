@@ -58,7 +58,7 @@ def update_html(ver: str) -> None:
     # Update <title>
     content = re.sub(
         r"<title>.*?</title>",
-        f"<title>thomo.ART MusicMaker v{ver} (CodexMundi Edition)</title>",
+        f"<title>thomo.ART MusicMaker v{ver} (Lantern House Edition)</title>",
         content,
         count=1,
     )

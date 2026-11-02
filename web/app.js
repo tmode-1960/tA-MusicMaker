@@ -63,6 +63,7 @@ const TEMPLATE_FALLBACK = [
   "asian/enka-vocal",
   "asian/game-jrpg-orchestral",
   "asian/indian-classical-instrumental",
+  "asian/j-rock-vocal",
   "asian/kpop-vocal",
   "asian/mandopop-ballad-vocal",
   "blues/blues-ballad-vocal",
@@ -138,11 +139,14 @@ const TEMPLATE_FALLBACK = [
   "electronic/vaporwave-instrumental",
   "european/alpine-volksmusik-instrumental",
   "european/balkan-brass-instrumental",
+  "european/carnival-song-vocal",
   "european/chanson-vocal",
   "european/fado-vocal",
   "european/flamenco-instrumental",
   "european/irish-pub-session-instrumental",
+  "european/italian-pop-vocal",
   "european/klezmer-instrumental",
+  "european/party-schlager-vocal",
   "european/polka-instrumental",
   "european/russian-folk-vocal",
   "european/schlager-vocal",
@@ -151,6 +155,7 @@ const TEMPLATE_FALLBACK = [
   "folk/celtic-folk-vocal",
   "folk/dark-fairytale-folk-vocal",
   "folk/folk-punk-vocal",
+  "folk/german-liedermacher-vocal",
   "folk/melancholic-folk-ballad-vocal",
   "folk/mystical-medieval-folk-vocal",
   "folk/nordic-folk-vocal",
@@ -166,6 +171,7 @@ const TEMPLATE_FALLBACK = [
   "hiphop/cloud-rap-vocal",
   "hiphop/drill-instrumental",
   "hiphop/german-rap-vocal",
+  "hiphop/melodic-trap-vocal",
   "hiphop/old-school-hiphop-vocal",
   "hiphop/phonk-instrumental",
   "hiphop/rnb-vocal",
@@ -193,13 +199,16 @@ const TEMPLATE_FALLBACK = [
   "jazz/smooth-jazz-vocal-positive-resolution",
   "jazz/swing-big-band-instrumental",
   "jazz/vocal-jazz-crooner",
+  "kids/birthday-song-vocal",
   "kids/children-song-vocal",
+  "kids/german-birthday-song-vocal",
   "kids/kids-adventure-song-vocal",
   "kids/lullaby-vocal",
   "kids/nursery-rhyme-german-vocal",
   "latin/bachata-vocal",
   "latin/bossa-nova-vocal",
   "latin/cumbia-instrumental",
+  "latin/latin-pop-vocal",
   "latin/merengue-instrumental",
   "latin/norteno-corrido-vocal",
   "latin/reggaeton-vocal",
@@ -252,6 +261,7 @@ const TEMPLATE_FALLBACK = [
   "rock/garage-rock-vocal",
   "rock/hard-rock-vocal",
   "rock/indie-rock-vocal",
+  "rock/pop-rock-vocal",
   "rock/post-rock-instrumental",
   "rock/progressive-rock-instrumental",
   "rock/psychedelic-rock-instrumental",
@@ -264,6 +274,7 @@ const TEMPLATE_FALLBACK = [
   "seasonal/christmas-pop-vocal",
   "seasonal/german-christmas-vocal",
   "seasonal/wedding-ceremony-instrumental",
+  "seasonal/wedding-first-dance-vocal",
   "soul/doo-wop-vocal",
   "soul/motown-soul-vocal",
   "soul/neo-soul-vocal",
@@ -278,11 +289,11 @@ const TEMPLATE_FALLBACK = [
   "world/mariachi-vocal",
   "world/mongolian-throat-singing-instrumental",
   "world/qawwali-vocal",
-  "world/turkish-folk-instrumental",
+  "world/turkish-folk-instrumental"
 ];
 
 const FIELDS = [
-  { k: "template", label: "f_template", fallback: TEMPLATE_FALLBACK, tip: "tip_template" },
+  { k: "template", label: "f_template", fallback: TEMPLATE_FALLBACK, tip: "tip_template", searchable: true },
   { k: "description", label: "f_description", type: "textarea", rows: 3, tip: "tip_description" },
   { k: "genre", label: "f_genre", tip: "tip_genre" },
   { k: "mood", label: "f_mood", tip: "tip_mood" },
@@ -293,12 +304,13 @@ const FIELDS = [
   { k: "vocals", label: "f_vocals", fallback: ["sung", "sparse vocals", "instrumental"], tip: "tip_vocals" },
   { k: "vocals.language", label: "f_language", tip: "tip_language" },
   { k: "vocals.voice", label: "f_voice", tip: "tip_voice" },
-  { k: "vocals.theme", label: "f_theme", type: "textarea", rows: 3, tip: "tip_theme" },
+  { k: "vocals.theme", label: "f_theme", type: "textarea", rows: 2, tip: "tip_theme" },
+  { k: "vocals.lyrics_from", label: "f_lyrics_from", fallback: ["written from the idea below", "my own, sung as written below"], tip: "tip_lyrics_from", def: "written from the idea below" },
+  { k: "vocals.lyrics", label: "f_lyrics", type: "textarea", rows: 4, tip: "tip_lyrics" },
   { k: "arrangement", label: "f_arrangement", fallback: ARRANGEMENT_FALLBACK, tip: "tip_arrangement" },
-  { k: "genre_closeness", label: "f_closeness", type: "range", tip: "tip_closeness", def: 70 },
-  { k: "creativity", label: "f_creativity", type: "range", tip: "tip_creativity", def: 50 },
+  { k: "genre_closeness", label: "f_closeness", type: "range", tip: "tip_closeness", def: 70, min: 0, max: 100 },
+  { k: "creativity", label: "f_creativity", type: "range", tip: "tip_creativity", def: 100, min: 0, max: 200 },
   { k: "lyrics_fidelity", label: "f_lyrics_fidelity", fallback: ["standard", "high - best of 2 takes", "highest - best of 3 takes"], tip: "tip_lyrics_fidelity", def: "standard" },
-  { k: "lines_under_singing", label: "f_lines", type: "checkbox", tip: "tip_lines" },
 ];
 
 const DOC_INPUTS = { title: "shTitle", style: "shStyle", lyrics: "shLyrics", artwork_prompt: "shArt" };
@@ -307,7 +319,7 @@ const DOC_KEYS = Object.keys(DOC_INPUTS);
 const S = {
   mode: "review", defaults: null, options: {}, job: null, timer: null, brief: {}, status: null,
   sheetState: { title: "auto", style: "auto", lyrics: "auto", artwork_prompt: "auto" },
-  lastDraft: {}, applioAvailable: true, voiceModels: [],
+  lastDraft: {}, applioAvailable: true, voiceModels: [], templates: {},
 };
 const STORE = "tamusicmaker.v1";
 
@@ -318,32 +330,294 @@ function toast(msg, isErr) {
 }
 
 // ---------------------------------------------------------------- form
+function buildCombobox(f, val) {
+  const combo = document.createElement("div");
+  combo.className = "combobox";
+
+  const inputWrap = document.createElement("div");
+  inputWrap.className = "combobox-input-wrap";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "combobox-input";
+  input.dataset.key = f.k;
+  input.value = val != null ? val : "";
+  input.placeholder = t("templateSearchPlaceholder") || "Vorlage suchen oder eingeben…";
+  input.autocomplete = "off";
+  input.spellcheck = false;
+
+  const actions = document.createElement("div");
+  actions.className = "combobox-actions";
+
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.className = "combobox-clear";
+  clearBtn.innerHTML = "&times;";
+  clearBtn.title = "Löschen";
+  clearBtn.tabIndex = -1;
+  clearBtn.style.display = input.value ? "inline-flex" : "none";
+
+  const toggleBtn = document.createElement("button");
+  toggleBtn.type = "button";
+  toggleBtn.className = "combobox-toggle";
+  toggleBtn.tabIndex = -1;
+  toggleBtn.innerHTML = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg>`;
+
+  actions.append(clearBtn, toggleBtn);
+  inputWrap.append(input, actions);
+
+  const menu = document.createElement("div");
+  menu.className = "combobox-menu";
+  menu.hidden = true;
+
+  combo.append(inputWrap, menu);
+
+  let isOpen = false;
+  let activeIndex = -1;
+  let filteredOptions = [];
+
+  function getOptions() {
+    return S.options[f.k] || f.fallback || [];
+  }
+
+  function renderItems(filterQuery = "") {
+    menu.innerHTML = "";
+    const q = (filterQuery || "").trim().toLowerCase();
+    const allOpts = getOptions();
+    filteredOptions = q ? allOpts.filter((o) => o.toLowerCase().includes(q)) : allOpts;
+    activeIndex = -1;
+
+    if (filteredOptions.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "combobox-empty";
+      empty.textContent = t("noTemplateMatch") || "Keine passende Vorlage gefunden";
+      menu.appendChild(empty);
+      return;
+    }
+
+    filteredOptions.forEach((opt, idx) => {
+      const item = document.createElement("div");
+      item.className = "combobox-item" + (opt === input.value ? " selected" : "");
+      item.dataset.index = idx;
+      item.textContent = opt;
+
+      item.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+      });
+      item.addEventListener("click", () => {
+        selectOption(opt);
+      });
+      menu.appendChild(item);
+    });
+  }
+
+  function openMenu(filterText = "") {
+    isOpen = true;
+    menu.hidden = false;
+    combo.classList.add("open");
+    renderItems(filterText);
+    const sel = menu.querySelector(".combobox-item.selected");
+    if (sel) {
+      sel.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  function closeMenu() {
+    isOpen = false;
+    menu.hidden = true;
+    combo.classList.remove("open");
+    activeIndex = -1;
+  }
+
+  function selectOption(opt) {
+    input.value = opt;
+    clearBtn.style.display = opt ? "inline-flex" : "none";
+    S.brief[f.k] = opt;
+    persist();
+    closeMenu();
+    if (f.k === "template" && opt && opt !== "none") {
+      applyTemplateValues(opt, false);
+    }
+  }
+
+  function updateActive(items) {
+    items.forEach((it, i) => {
+      if (i === activeIndex) {
+        it.classList.add("active");
+        it.scrollIntoView({ block: "nearest" });
+      } else {
+        it.classList.remove("active");
+      }
+    });
+  }
+
+  input.addEventListener("focus", () => {
+    const all = getOptions();
+    if (all.includes(input.value)) {
+      openMenu("");
+    } else {
+      openMenu(input.value);
+    }
+    setTimeout(() => {
+      try { input.select(); } catch (_) {}
+    }, 50);
+  });
+
+  input.addEventListener("input", () => {
+    clearBtn.style.display = input.value ? "inline-flex" : "none";
+    S.brief[f.k] = input.value;
+    persist();
+    openMenu(input.value);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!isOpen) {
+        openMenu(input.value);
+        return;
+      }
+      const items = menu.querySelectorAll(".combobox-item");
+      if (!items.length) return;
+      activeIndex = (activeIndex + 1) % items.length;
+      updateActive(items);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!isOpen) {
+        openMenu(input.value);
+        return;
+      }
+      const items = menu.querySelectorAll(".combobox-item");
+      if (!items.length) return;
+      activeIndex = (activeIndex - 1 + items.length) % items.length;
+      updateActive(items);
+    } else if (e.key === "Enter") {
+      if (isOpen) {
+        e.preventDefault();
+        const items = menu.querySelectorAll(".combobox-item");
+        if (activeIndex >= 0 && items[activeIndex]) {
+          selectOption(filteredOptions[activeIndex]);
+        } else if (filteredOptions.length === 1) {
+          selectOption(filteredOptions[0]);
+        } else {
+          closeMenu();
+        }
+      }
+    } else if (e.key === "Escape") {
+      if (isOpen) {
+        e.preventDefault();
+        closeMenu();
+      }
+    } else if (e.key === "Tab") {
+      closeMenu();
+    }
+  });
+
+  clearBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    input.value = "";
+    clearBtn.style.display = "none";
+    S.brief[f.k] = "";
+    persist();
+    input.focus();
+    openMenu("");
+  });
+
+  toggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (isOpen) {
+      closeMenu();
+    } else {
+      input.focus();
+      openMenu("");
+    }
+  });
+
+  const onOutside = (e) => {
+    if (!document.contains(combo)) {
+      document.removeEventListener("pointerdown", onOutside);
+      return;
+    }
+    if (!combo.contains(e.target)) {
+      closeMenu();
+    }
+  };
+  document.addEventListener("pointerdown", onOutside);
+
+  return combo;
+}
+
+function describeRangeVal(key, val) {
+  if (key === "creativity") {
+    const v = Number(val);
+    let lvl = "steady";
+    if (v <= 19) lvl = t("creativity_steady") || "steady";
+    else if (v <= 39) lvl = t("creativity_restrained") || "restrained";
+    else if (v <= 60) lvl = t("creativity_balanced") || "balanced";
+    else if (v <= 80) lvl = t("creativity_varied") || "varied";
+    else if (v <= 150) lvl = t("creativity_experimental") || "experimental";
+    else lvl = t("creativity_adventurous") || "adventurous";
+    const note = v === 100 ? ` (${t("creativity_default") || "default"})` : (v === 50 ? ` (${t("creativity_ref") || "ref"})` : "");
+    return `${v} · ${lvl}${note}`;
+  }
+  return val;
+}
+
+function updateLyricsPlaceholder() {
+  const fromVal = S.brief["vocals.lyrics_from"];
+  const el = document.querySelector('#briefForm [data-key="vocals.lyrics"]');
+  if (!el) return;
+  if (fromVal === "my own, sung as written below") {
+    el.placeholder = "[Verse 1]\nDein eigener Text...\n\n[Chorus]\nDein Refrain...";
+  } else {
+    el.placeholder = "Idee für den Text (wird vom Writer ausformuliert)...";
+  }
+}
+
+function applyTemplateValues(opt, force = false) {
+  const tmpl = S.templates && S.templates[opt];
+  if (!tmpl) return;
+  const mapping = {
+    "description": tmpl.description,
+    "genre": tmpl.genre,
+    "mood": tmpl.mood,
+    "tempo": tmpl.tempo,
+    "key": tmpl.key,
+    "meter": tmpl.meter,
+    "length": tmpl.length,
+    "vocals": tmpl.vocals,
+    "vocals.language": tmpl.language,
+    "vocals.voice": tmpl.voice,
+    "vocals.theme": tmpl.theme,
+    "vocals.lyrics": tmpl.lyrics,
+  };
+  let applied = 0;
+  for (const [k, val] of Object.entries(mapping)) {
+    if (val !== undefined && val !== null) {
+      if (force || !S.brief[k] || S.brief[k] === "") {
+        S.brief[k] = val;
+        const inputEl = document.querySelector(`#briefForm [data-key="${k}"]`);
+        if (inputEl) {
+          inputEl.value = val;
+        }
+        applied++;
+      }
+    }
+  }
+  persist();
+  const name = tmpl.name || opt;
+  toast((t("templateApplied") || "Vorlage übernommen: {name}").replace("{name}", name));
+}
+
 function buildForm() {
   const root = $("#briefForm");
   root.innerHTML = "";
   for (const f of FIELDS) {
-    const wrap = document.createElement("label");
+    const wrap = document.createElement(f.type === "checkbox" ? "label" : "div");
     wrap.className = f.type === "checkbox" ? "check" : "field";
     const val = S.brief[f.k] != null ? S.brief[f.k] : f.def;
     if (S.brief[f.k] == null && f.def != null) S.brief[f.k] = f.def;
     const lbl = t(f.label);
-    let el;
-    if (f.type === "textarea") { el = document.createElement("textarea"); el.rows = f.rows || 3; }
-    else if (f.type === "checkbox") { el = document.createElement("input"); el.type = "checkbox"; el.checked = !!val; }
-    else if (f.type === "range") { el = document.createElement("input"); el.type = "range"; el.min = 0; el.max = 100; }
-    else {
-      const opts = S.options[f.k] || f.fallback;
-      if (opts && opts.length) {
-        el = document.createElement("select");
-        const all = opts.includes(val) || val == null ? opts : [val, ...opts];
-        for (const o of all) { const op = document.createElement("option"); op.value = op.textContent = o; el.appendChild(op); }
-      } else el = document.createElement("input");
-    }
-    el.dataset.key = f.k;
-    if (f.type !== "checkbox" && val != null) el.value = val;
-    el.addEventListener("input", () => { S.brief[f.k] = f.type === "checkbox" ? el.checked : f.type === "range" ? Number(el.value) : el.value; persist(); if (f.type === "range") span.textContent = el.value; });
-    let span = document.createElement("span");
-    span.textContent = f.type === "range" ? `${lbl}: ${el.value}` : lbl;
 
     let tipEl = null;
     if (f.tip) {
@@ -354,8 +628,51 @@ function buildForm() {
       tipEl.dataset.i18nTip = f.tip;
     }
 
+    if (f.searchable) {
+      const el = buildCombobox(f, val);
+      const head = document.createElement("span");
+      head.className = "field-head";
+      const span = document.createElement("span");
+      span.textContent = lbl;
+      head.append(span);
+      if (tipEl) head.append(tipEl);
+      wrap.append(head, el);
+      root.appendChild(wrap);
+      continue;
+    }
+
+    let el;
+    if (f.type === "textarea") { el = document.createElement("textarea"); el.rows = f.rows || 3; }
+    else if (f.type === "checkbox") { el = document.createElement("input"); el.type = "checkbox"; el.checked = !!val; }
+    else if (f.type === "range") { el = document.createElement("input"); el.type = "range"; el.min = f.min != null ? f.min : 0; el.max = f.max != null ? f.max : 100; }
+    else {
+      const opts = S.options[f.k] || f.fallback;
+      if (opts && opts.length) {
+        el = document.createElement("select");
+        const all = opts.includes(val) || val == null ? opts : [val, ...opts];
+        for (const o of all) {
+          const op = document.createElement("option");
+          op.value = o;
+          if (o === "written from the idea below") op.textContent = t("opt_written_from_idea") || o;
+          else if (o === "my own, sung as written below") op.textContent = t("opt_my_own_lyrics") || o;
+          else op.textContent = o;
+          el.appendChild(op);
+        }
+      } else el = document.createElement("input");
+    }
+    el.dataset.key = f.k;
+    if (f.type !== "checkbox" && val != null) el.value = val;
+    el.addEventListener("input", () => {
+      S.brief[f.k] = f.type === "checkbox" ? el.checked : f.type === "range" ? Number(el.value) : el.value;
+      persist();
+      if (f.type === "range") span.textContent = describeRangeVal(f.k, el.value);
+      if (f.k === "vocals.lyrics_from") updateLyricsPlaceholder();
+    });
+    let span = document.createElement("span");
+    span.textContent = f.type === "range" ? `${lbl}: ${describeRangeVal(f.k, el.value)}` : lbl;
+
     if (f.type === "range") {
-      span.textContent = el.value;
+      span.textContent = describeRangeVal(f.k, el.value);
       const lab = document.createElement("span");
       lab.className = "field-head";
       lab.textContent = lbl + ": ";
@@ -546,13 +863,15 @@ function collectOptions() {
     voice_model: $("#voiceModelSelect")?.value,
     voice_pitch: parseInt($("#voicePitch")?.value || "0", 10),
     voice_index_rate: parseFloat($("#voiceIndexRate")?.value || "0.75"),
-    srt_en: $("#expSrtEn")?.checked !== false,
+    srt_en: $("#expSrtEn")?.checked === true,
     writer_model: S.defaults?.writer_model || undefined,
     export: {
       flac: $("#expFlac").checked,
       mp3: $("#expMp3").checked,
       wav: $("#expWav").checked,
       lyrics_srt: $("#expSrt").checked,
+      song_page: !!$("#expSongPage")?.checked,
+      lyrics_timing: $("#expExactTiming")?.checked ? "vocal stem" : "the song",
       sheet_music: sheetOn ? ($("#expSheetFormat")?.value || "PDF (A4)") : "off",
       sheet_music_size: $("#expSheetSize")?.value || "standard",
       folder: $("#expFolder").value || "plenio",
@@ -629,6 +948,7 @@ function ensureVoice() {
 function planSeedValue() { return $("#planSeedRandom").checked ? null : ($("#planSeed").value || null); }
 function draftSeedValue() { return $("#draftSeedRandom").checked ? null : ($("#draftSeed").value || null); }
 
+let persistServerTimer = null;
 function persist() {
   const data = {
     brief: S.brief, mode: S.mode, sheet: sheetData(), sheetState: S.sheetState, opts: collectOptions(),
@@ -637,9 +957,22 @@ function persist() {
     count: $("#autoCount").value, lang: LANG,
   };
   localStorage.setItem(STORE, JSON.stringify(data));
+  clearTimeout(persistServerTimer);
+  persistServerTimer = setTimeout(() => {
+    api("/api/last_settings", { brief: S.brief, opts: collectOptions() }).catch(() => {});
+  }, 1000);
 }
 
-function restore() {
+async function resetBriefing() {
+  if (!confirm(t("confirmResetBrief") || "Song-Briefing auf die Standardwerte zurücksetzen?")) return;
+  S.brief = { ...(S.defaults?.brief || {}) };
+  buildForm();
+  persist();
+  api("/api/last_settings", { brief: S.brief, opts: collectOptions() }).catch(() => {});
+  toast(t("briefResetDone") || "Song-Briefing auf Standardwerte zurückgesetzt.");
+}
+
+function restore(fromStartup = false) {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(STORE) || "{}"); } catch {}
   if (saved.lang && I18N[saved.lang]) LANG = saved.lang;
@@ -648,22 +981,38 @@ function restore() {
   $("#optCover").checked = !!saved.opts?.cover; $("#optStems").checked = !!saved.opts?.stems; $("#optRefine").checked = !!saved.opts?.refine;
   $("#optVoiceSwap").checked = !!saved.opts?.voice_swap;
   $("#voiceSwapOptions").hidden = !$("#optVoiceSwap").checked;
+  if ($("#optLinesUnderSinging")) $("#optLinesUnderSinging").checked = !!(saved.brief?.lines_under_singing ?? S.brief?.lines_under_singing);
   if (saved.opts?.voice_pitch !== undefined) $("#voicePitch").value = saved.opts.voice_pitch;
   if (saved.opts?.voice_index_rate !== undefined) $("#voiceIndexRate").value = saved.opts.voice_index_rate;
   $("#expFlac").checked = ex.flac !== false; $("#expMp3").checked = !!ex.mp3; $("#expWav").checked = !!ex.wav; $("#expSrt").checked = ex.lyrics_srt !== false;
-  if ($("#expSrtEn")) $("#expSrtEn").checked = saved.opts?.srt_en !== false;
+  if ($("#expSrtEn")) $("#expSrtEn").checked = saved.opts?.srt_en === true;
+  if ($("#expExactTiming")) $("#expExactTiming").checked = ex.lyrics_timing === "vocal stem";
+  if ($("#expSongPage")) $("#expSongPage").checked = !!ex.song_page;
   if ($("#expSheet")) $("#expSheet").checked = !!(ex.sheet_music && ex.sheet_music !== "off");
   if (ex.sheet_music && ex.sheet_music !== "off" && $("#expSheetFormat")) $("#expSheetFormat").value = ex.sheet_music;
   if (ex.sheet_music_size && $("#expSheetSize")) $("#expSheetSize").value = ex.sheet_music_size;
   $("#expFolder").value = ex.folder || "plenio";
   $("#draftSeed").value = saved.draftSeed || S.defaults?.draft_seed || "";
-  $("#draftSeedRandom").checked = saved.rnd !== undefined ? saved.rnd : false;
+  const isOldDraftDefault = !saved.draftSeed && !saved.rnd;
+  $("#draftSeedRandom").checked = isOldDraftDefault ? true : (saved.rnd !== undefined ? saved.rnd : true);
   $("#autoCount").value = saved.count || 3;
-  $("#planSeed").value = saved.planSeed || 1; $("#planSeedRandom").checked = !!saved.planRnd;
-  const sh = saved.sheet || {};
-  $("#shTitle").value = sh.title || ""; $("#shStyle").value = sh.style || ""; $("#shLyrics").value = sh.lyrics || ""; $("#shArt").value = sh.artwork_prompt || "";
-  for (const k of DOC_KEYS) {
-    S.sheetState[k] = saved.sheetState?.[k] === "manual" ? "manual" : "auto";
+  const isOldPlanDefault = (saved.planSeed === 1 || saved.planSeed === "1" || !saved.planSeed) && !saved.planRnd;
+  $("#planSeed").value = isOldPlanDefault ? "" : (saved.planSeed || "");
+  $("#planSeedRandom").checked = isOldPlanDefault ? true : (saved.planRnd !== undefined ? saved.planRnd : true);
+
+  if (fromStartup) {
+    // Keep lyrics, title and style empty for a fresh song!
+    $("#shTitle").value = "";
+    $("#shStyle").value = "";
+    $("#shLyrics").value = "";
+    $("#shArt").value = "";
+    for (const k of DOC_KEYS) S.sheetState[k] = "auto";
+  } else {
+    const sh = saved.sheet || {};
+    $("#shTitle").value = sh.title || ""; $("#shStyle").value = sh.style || ""; $("#shLyrics").value = sh.lyrics || ""; $("#shArt").value = sh.artwork_prompt || "";
+    for (const k of DOC_KEYS) {
+      S.sheetState[k] = saved.sheetState?.[k] === "manual" ? "manual" : "auto";
+    }
   }
 
   const mst = saved.opts?.mastering || {};
@@ -895,15 +1244,22 @@ function getAudioAnalyser(audioEl) {
 function renderSubtitleLinks(box, subs) {
   box.innerHTML = "";
   subs.forEach((s) => {
+    const isResolve = s.role === "resolve" || s.role === "resolve_en" || (s.name && s.name.includes(".resolve."));
     const link = document.createElement("a");
-    link.className = "mini srt-link";
+    link.className = isResolve ? "mini srt-link resolve-srt-link" : "mini srt-link";
     link.href = s.url ? (s.url.includes("?") ? `${s.url}&download=1` : `${s.url}?download=1`) : "#";
     link.download = s.name;
-    link.textContent = `⬇ ${s.label || s.name}`;
+    link.textContent = isResolve ? `🎬 ${s.label || s.name}` : `⬇ ${s.label || s.name}`;
     link.style.textDecoration = "none";
     link.style.display = "inline-block";
     link.style.marginRight = "6px";
     link.style.marginTop = "6px";
+    if (isResolve) {
+      link.title = t("davinciResolveTip") || "DaVinci Resolve: 100% schnitt-präzise Timings ohne Überlappungen.";
+      link.style.borderColor = "var(--primary, #00d2ff)";
+      link.style.fontWeight = "bold";
+      link.style.background = "rgba(0, 210, 255, 0.12)";
+    }
     box.append(link);
   });
 }
@@ -1706,7 +2062,7 @@ function mediaInto(parent, media, extra = {}) {
   btnSrt.onclick = async () => {
     btnSrt.disabled = true;
     try {
-      const res = await api("/api/translate_srt", { audio_url: activeTrack.url, target_lang: "en" });
+      const res = await api("/api/translate_srt", { audio_url: activeTrack.url, target_lang: "auto" });
       if (res.subtitles && res.subtitles.length) {
         subs = res.subtitles;
         activeSub = subs.find((s) => s.lang === "bilingual" || s.lang === "en") || subs[0];
@@ -3333,12 +3689,23 @@ async function refreshStatus() {
     const box = $("#status");
     box.className = "status " + (st.comfy ? "ok" : "bad");
     let text = st.comfy ? t("comfyOk") : t("comfyBad");
-    if (st.comfy && st.plenio_api) text += " · Plenio API v1";
+    if (st.comfy) {
+      if (st.plenio_version) {
+        const pVer = String(st.plenio_version).trim();
+        if (pVer.startsWith("1.5")) {
+          text += ` · Plenio v${pVer}`;
+        } else {
+          text += ` · Plenio v${pVer} (1.5-ready)`;
+        }
+      } else if (st.plenio_api) {
+        text += " · Plenio (1.5-ready)";
+      }
+    }
     if (st.comfy && st.gpu) text += ` · ${st.gpu.replace(/^cuda:\d+\s*/, "")}` + (st.vram_total ? ` · ${(st.vram_free / 2 ** 30).toFixed(1)}/${(st.vram_total / 2 ** 30).toFixed(0)} ${t("gbFree")}` : "");
     if (!st.workflow) text += ` · ${t("wfMissing")}`;
     $("#statusText").textContent = text;
     $("#btnStartComfy").hidden = st.comfy || !st.can_start;
-    if (st.comfy && (!S.options._live || !S.options.length)) {
+    if (st.comfy && !S.options._live) {
       S.options = await api("/api/options").catch(() => ({}));
       if (Object.keys(S.options).length) {
         buildForm();
@@ -3365,6 +3732,75 @@ function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", t);
   try { localStorage.setItem("tamusicmaker.theme", t); } catch {}
   if ($("#cfgTheme")) $("#cfgTheme").value = t;
+}
+
+let changelogLoaded = false;
+
+function renderChangelogMarkdown(md) {
+  if (!md) return `<p style="color:var(--mute)">${t("changelogEmpty")}</p>`;
+  const lines = md.split("\n");
+  let html = "";
+  let inList = false;
+
+  for (let rawLine of lines) {
+    let line = rawLine
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+      .replace(/`([^`]+)`/g, "<code style='background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:3px;font-size:11px'>$1</code>");
+
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("### ")) {
+      if (inList) { html += "</ul>"; inList = false; }
+      const isDe = trimmed.includes("Deutsch");
+      const badgeCol = isDe ? "#4ade80" : "#60a5fa";
+      const badgeBg = isDe ? "rgba(74, 222, 128, 0.12)" : "rgba(96, 165, 250, 0.12)";
+      html += `<div style="font-size:12px;font-weight:700;margin:12px 0 6px;display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;background:${badgeBg};color:${badgeCol}">${trimmed.substring(4)}</div>`;
+    } else if (trimmed.startsWith("## ")) {
+      if (inList) { html += "</ul>"; inList = false; }
+      html += `<div style="font-size:13px;font-weight:700;margin:16px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--line);color:var(--text)">${trimmed.substring(3)}</div>`;
+    } else if (trimmed.startsWith("# ")) {
+      if (inList) { html += "</ul>"; inList = false; }
+      html += `<div style="font-size:14px;font-weight:800;margin:4px 0 6px;color:var(--text)">${trimmed.substring(2)}</div>`;
+    } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      if (!inList) { html += "<ul style='margin:4px 0 8px 16px;padding:0'>"; inList = true; }
+      html += `<li style="margin-bottom:4px;line-height:1.4">${trimmed.substring(2)}</li>`;
+    } else if (trimmed === "---") {
+      if (inList) { html += "</ul>"; inList = false; }
+      html += `<hr style="border:none;border-top:1px solid var(--line);margin:12px 0">`;
+    } else if (trimmed) {
+      if (inList) { html += "</ul>"; inList = false; }
+      html += `<p style="margin:4px 0;color:var(--mute)">${trimmed}</p>`;
+    }
+  }
+  if (inList) html += "</ul>";
+  return html;
+}
+
+async function toggleChangelog() {
+  const content = $("#changelogContent");
+  const chevron = $("#changelogChevron");
+  if (!content) return;
+  const isHidden = content.style.display === "none";
+  if (isHidden) {
+    content.style.display = "block";
+    if (chevron) chevron.textContent = "▲";
+    if (!changelogLoaded) {
+      try {
+        const res = await api("/api/changelog");
+        $("#changelogBody").innerHTML = renderChangelogMarkdown(res?.content || "");
+        changelogLoaded = true;
+      } catch (err) {
+        $("#changelogBody").innerHTML = `<span style="color:#ef4444">Fehler beim Laden: ${err.message || err}</span>`;
+      }
+    }
+  } else {
+    content.style.display = "none";
+    if (chevron) chevron.textContent = "▼";
+  }
 }
 
 async function openSettings() {
@@ -3447,11 +3883,21 @@ async function init() {
     if (c.language && I18N[c.language]) LANG = c.language;
     if (c.theme) applyTheme(c.theme);
   } catch {}
-  restore();
+  try {
+    const srvSettings = await api("/api/last_settings").catch(() => ({}));
+    if (srvSettings && (srvSettings.brief || srvSettings.opts)) {
+      const local = JSON.parse(localStorage.getItem(STORE) || "{}");
+      const merged = { ...srvSettings, ...local };
+      if (!local.brief && srvSettings.brief) merged.brief = srvSettings.brief;
+      if (!local.opts && srvSettings.opts) merged.opts = srvSettings.opts;
+      localStorage.setItem(STORE, JSON.stringify(merged));
+    }
+  } catch {}
+  restore(true);
   applyI18n();
   populateLangDropdown();
   try { S.defaults = await api("/api/defaults"); } catch (e) { toast(t("wfReadErr") + e.message, true); S.defaults = { brief: {}, export: {} }; }
-  restore();
+  restore(true);
   applyI18n();
   refreshDocBadges();
   buildForm();
@@ -3473,7 +3919,7 @@ async function init() {
   }
   document.querySelectorAll(".tag-btn").forEach((b) => (b.onclick = () => insertSectionTag(b.dataset.tag)));
 
-  ["draftSeed", "draftSeedRandom", "planSeed", "planSeedRandom", "autoCount", "optCover", "optStems", "optRefine", "optVoiceSwap", "voicePitch", "voiceIndexRate", "expFlac", "expMp3", "expWav", "expSrt", "expSrtEn", "expSheet", "expSheetFormat", "expSheetSize", "expFolder",
+  ["draftSeed", "draftSeedRandom", "planSeed", "planSeedRandom", "autoCount", "optCover", "optStems", "optRefine", "optVoiceSwap", "optLinesUnderSinging", "voicePitch", "voiceIndexRate", "expFlac", "expMp3", "expWav", "expSrt", "expSrtEn", "expSheet", "expSheetFormat", "expSheetSize", "expFolder", "expSongPage", "expExactTiming",
     "mstEnabled", "mstEqMode", "mstEqPreset", "mstEqTarget", "mstEqStrength", "mstEqMaxGain", "mstEqMaxBands",
     "mstLoudTarget", "mstCustomLufs", "mstCustomCeiling", "mstCompression", "mstCompThreshold", "mstCompRatio", "mstCompKnee", "mstCompAttack", "mstCompRelease", "mstCompSidechain", "mstCompDetector", "mstSampleRate",
     "hqStereoEnabled", "hqStereoPreset", "hqStereoHighcut", "hqStereoCleanup", "hqStereoWarmth",
@@ -3495,6 +3941,10 @@ async function init() {
   $("#btnResetMastering")?.addEventListener("click", resetMasteringDefaults);
   updateMasteringUI();
 
+  $("#optLinesUnderSinging")?.addEventListener("change", (e) => {
+    S.brief["lines_under_singing"] = e.target.checked;
+    persist();
+  });
   $("#optVoiceSwap")?.addEventListener("change", (e) => {
     $("#voiceSwapOptions").hidden = !e.target.checked;
     persist();
@@ -3516,12 +3966,28 @@ async function init() {
   });
   loadVoiceModels();
 
-  const base = () => ({ brief: S.brief, draft_seed: draftSeedValue(), plan_seed: planSeedValue(), options: collectOptions() });
+  const base = () => ({ brief: { ...S.brief, lines_under_singing: !!$("#optLinesUnderSinging")?.checked }, draft_seed: draftSeedValue(), plan_seed: planSeedValue(), options: collectOptions() });
   $("#btnDraft").onclick = () => startJob("/api/draft", base());
   $("#btnRender").onclick = () => { ensureVoice(); startJob("/api/render", { ...base(), mode: "review", sheet: sheetData(), sheet_states: { ...S.sheetState } }); };
   $("#btnAuto").onclick = () => { ensureVoice(); startJob("/api/render", { ...base(), mode: "auto", count: Number($("#autoCount").value) || 1, sheet: sheetData(), sheet_states: { ...S.sheetState } }); };
   $("#btnCancel").onclick = () => S.job && api("/api/cancel", { id: S.job.id });
   $("#btnSettings").onclick = openSettings;
+  $("#btnToggleChangelog")?.addEventListener("click", toggleChangelog);
+
+  $("#btnResetBrief")?.addEventListener("click", resetBriefing);
+  $("#btnRefillTemplate")?.addEventListener("click", () => {
+    if (S.brief.template && S.brief.template !== "none") {
+      applyTemplateValues(S.brief.template, true);
+    } else {
+      toast(t("noTemplateMatch") || "Bitte zuerst eine Vorlage auswählen.");
+    }
+  });
+  api("/api/templates").then((res) => {
+    if (res && typeof res === "object") {
+      S.templates = res;
+    }
+  }).catch(() => {});
+  updateLyricsPlaceholder();
   $("#cfgTheme").onchange = () => {
     const theme = $("#cfgTheme").value;
     applyTheme(theme);

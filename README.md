@@ -1,19 +1,22 @@
-# tA-MusicMaker (v0.87)
+# tA-MusicMaker (v1.08) — Lantern House Edition
 
 A modern Windows desktop application for AI music production powered by the **Plenio YuE2 — Song** ComfyUI workflow, wrapped in the signature **thomo.ART** dark UI.
 
-Connects to your local ComfyUI instance and replaces complex node networks with a clean, intuitive, and responsive interface.
+Connects directly to your local ComfyUI instance and transforms complex node networks into an intuitive, responsive, and elegant production suite.
 
 ---
 
 ## 🎵 Features
 
-- **Intuitive Studio UI:** Clean dark theme with responsive controls, real-time status monitoring, and bilingual support (**Deutsch** / **English**).
+- **Intuitive Studio UI:** Signature dark theme with responsive controls, real-time status monitoring, and bilingual support (**Deutsch** / **English**).
 - **Direct ComfyUI Integration:** Automatically connects to your local ComfyUI instance via WebSocket/REST (`http://127.0.0.1:8188`).
+- **Dynamic Plenio Version Detection:** Automatically detects your installed [Plenio Music Production System](https://github.com/jplenio/Plenio-Music-Production-System) version (v1.4.1 / v1.5-ready) and displays live API status and GPU/VRAM statistics.
 - **AI Song Generation (YuE2 3B):**
   - Full song generation with lyrics and customizable genre styles.
   - Lyrics and prompt assistant powered by LLM (*Gemma 4 E4B*).
   - Seed management, batch iterations, and lyrics fidelity controls.
+- **Visual Audio Timeline Ruler:**
+  - Clear timeline scale showing song minutes, seconds, and musical bar intervals.
 - **Audio Post-Processing & Add-ons:**
   - **Stem Separation:** Split generated tracks into vocals and instrumental stems (*BS-RoFormer*).
   - **Audio Refinement (48 kHz):** High-fidelity audio super-resolution (*UniverSR*).
@@ -36,12 +39,12 @@ Connects to your local ComfyUI instance and replaces complex node networks with 
 1. Go to the [**Releases**](https://github.com/tmode-1960/tA-MusicMaker/releases) section of this repository.
 2. Download either:
    - **`tA-MusicMaker-Setup.exe`** (Standard Windows Installer with Start Menu & Desktop shortcuts)
-   - **`tA-MusicMaker.exe`** (Portable single-file executable)
+   - **`tA-MusicMaker-v1.08.zip`** (Portable package — extract anywhere and double-click `tA-MusicMaker.exe`)
 3. Ensure ComfyUI is running in the background.
 4. Launch **tA-MusicMaker**. Once the status indicator turns green (*ComfyUI connected*), you're ready to create!
 
 > **Windows SmartScreen Note:**  
-> Because this executable is built independently and not signed with an expensive enterprise certificate, Windows may display *"Windows protected your PC"*.  
+> Because this executable is built independently and not signed with an enterprise certificate, Windows may display *"Windows protected your PC"*.  
 > Simply click **"More info"** &rarr; **"Run anyway"**.
 
 ---
@@ -73,7 +76,7 @@ pip install pywebview
 To generate music, ensure your local ComfyUI instance has the following installed:
 
 ### 1. Custom Nodes (via ComfyUI Manager)
-* **Plenio Music Production System** (search for *"Plenio"* in ComfyUI Manager and install).
+* **Plenio Music Production System** (search for *"Plenio"* in ComfyUI Manager and install). Reference: [Plenio Repository](https://github.com/jplenio/Plenio-Music-Production-System).
 
 ### 2. AI Models (inside ComfyUI)
 * **Music Model:** `YuE2 3B int8`
@@ -106,5 +109,7 @@ If you wish to compile the application and installer yourself:
 
 ## 📄 Credits & License
 
-Created by **thomo.ART**.  
-Released under the MIT License.
+- Created by **thomo.ART**.
+- Powered by the [Plenio Music Production System](https://github.com/jplenio/Plenio-Music-Production-System) by J. Plenio.
+- Special thanks to CodexMundi for inspiration, testing and collaboration.
+- Released under the MIT License.

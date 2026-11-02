@@ -68,9 +68,46 @@ class WorkflowConverter:
     def top_node(self, node_id: int) -> dict:
         return self.top.nodes[node_id]
 
+    @staticmethod
+    def _node_widgets(node: dict) -> dict[str, Any]:
+        """Extract widget key-value pairs from a node.
+
+        Maps positional ``widgets_values`` to widget inputs declared in ``node['inputs']``,
+        skipping control values (such as 'fixed' / 'randomize' for seeds). Also supplements
+        any keys from ``widgets_values_named`` for backwards compatibility.
+        """
+        res: dict[str, Any] = {}
+        w_vals = node.get("widgets_values")
+        if isinstance(w_vals, dict):
+            res.update(w_vals)
+        elif isinstance(w_vals, list):
+            inp_widgets = [i["name"] for i in node.get("inputs", []) if "widget" in i]
+            if not inp_widgets and "widgets" in node:
+                for w in node["widgets"]:
+                    if isinstance(w, dict) and "name" in w:
+                        inp_widgets.append(w["name"])
+                    elif isinstance(w, str):
+                        inp_widgets.append(w)
+            val_idx = 0
+            for wname in inp_widgets:
+                if val_idx >= len(w_vals):
+                    break
+                val = w_vals[val_idx]
+                val_idx += 1
+                if val_idx < len(w_vals) and isinstance(w_vals[val_idx], str) and w_vals[val_idx] in CONTROL_VALUES:
+                    val_idx += 1
+                res[wname] = val
+
+        named = node.get("widgets_values_named")
+        if isinstance(named, dict):
+            for k, v in named.items():
+                if k not in res:
+                    res[k] = v
+        return res
+
     def widget_defaults(self, node_id: int) -> dict:
         node = self.top.nodes[node_id]
-        return dict(node.get("widgets_values_named") or {})
+        return self._node_widgets(node)
 
     def convert(
         self,
@@ -138,7 +175,7 @@ class WorkflowConverter:
                 return None
             return self._resolve_output(scope, link["origin_id"], link["origin_slot"])
         if "widget" in inp:
-            named = node.get("widgets_values_named") or {}
+            named = self._node_widgets(node)
             value = named.get(inp["name"])
             if value is not None:
                 return ("value", value)
@@ -160,7 +197,7 @@ class WorkflowConverter:
                 if src is not None:
                     return src
                 break
-        named = outer.get("widgets_values_named") or {}
+        named = self._node_widgets(outer)
         if named.get(name) is not None:
             return ("value", named[name])
         return None
@@ -218,12 +255,12 @@ class WorkflowConverter:
         seen = set()
         for inp in node.get("inputs", []):
             name = inp["name"]
-            seen.add(name)
             src = self._input_source(scope, node, inp)
             if src is None:
                 continue
             inputs[name] = [src[1], src[2]] if src[0] == "link" else src[1]
-        named = node.get("widgets_values_named") or {}
+            seen.add(name)
+        named = self._node_widgets(node)
         for name, value in named.items():
             if name in seen or value is None:
                 continue

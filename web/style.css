@@ -548,4 +548,124 @@ dialog::backdrop{background:#000a}
   background: #ede9fe;
 }
 
+/* Combobox (Searchable Dropdown) */
+.combobox {
+  position: relative;
+  width: 100%;
+}
+.combobox-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.combobox-input {
+  width: 100%;
+  padding-right: 58px !important;
+  text-overflow: ellipsis;
+  cursor: text;
+}
+.combobox.open .combobox-input {
+  border-color: var(--accent);
+}
+.combobox-actions {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.combobox-clear,
+.combobox-toggle {
+  background: transparent;
+  border: none;
+  color: var(--mute);
+  padding: 4px;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+}
+.combobox-clear {
+  font-size: 16px;
+  width: 20px;
+  height: 20px;
+}
+.combobox-clear:hover,
+.combobox-toggle:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme="light"] .combobox-clear:hover,
+:root[data-theme="light"] .combobox-toggle:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.combobox-toggle svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s ease;
+}
+.combobox.open .combobox-toggle svg {
+  transform: rotate(180deg);
+}
+.combobox-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--panel2);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  z-index: 1000;
+  padding: 4px;
+}
+:root[data-theme="light"] .combobox-menu {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  background: #ffffff;
+  border-color: var(--accent);
+}
+.combobox-item {
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+.combobox-item:hover,
+.combobox-item.active {
+  background: rgba(124, 92, 255, 0.22);
+  color: #ffffff;
+}
+:root[data-theme="light"] .combobox-item:hover,
+:root[data-theme="light"] .combobox-item.active {
+  background: rgba(107, 70, 239, 0.12);
+  color: var(--accent);
+}
+.combobox-item.selected {
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 600;
+}
+.combobox-empty {
+  padding: 12px 10px;
+  font-size: 12px;
+  color: var(--mute);
+  text-align: center;
+  font-style: italic;
+}
+
 

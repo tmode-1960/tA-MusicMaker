@@ -1,6 +1,6 @@
 ; Inno Setup Script for tA MusicMaker
 #define MyAppName "tA MusicMaker"
-#define MyAppVersion "0.87"
+#define MyAppVersion "1.08"
 #define MyAppPublisher "tA MusicMaker"
 #define MyAppExeName "tA-MusicMaker.exe"
 
@@ -35,6 +35,8 @@ Source: "YuE2-Song.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Stimmaufnahme-Vorlage-RVC.pdf"; DestDir: "{app}"; Flags: ignoreversion
 Source: "version.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "data\plenio_templates.json"; DestDir: "{app}\data"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

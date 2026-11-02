@@ -42,6 +42,7 @@ python -m PyInstaller --noconfirm --clean --onefile --noconsole ^
     --icon "app.ico" ^
     --add-data "web;web" ^
     --add-data "YuE2-Song.json;." ^
+    --add-data "data\plenio_templates.json;data" ^
     --add-data "app.ico;." ^
     --add-data "version.txt;." ^
     --add-data "Stimmaufnahme-Vorlage-RVC.pdf;." ^

@@ -34,7 +34,7 @@ from workflow_converter import ConversionError, WorkflowConverter, load_workflow
 import srt_translate
 import voice_swap
 
-APP_VERSION = "0.87"
+APP_VERSION = "1.08"
 IS_FROZEN = getattr(sys, "frozen", False)
 BUNDLE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 APP_DIR = os.path.dirname(os.path.abspath(sys.executable)) if IS_FROZEN else os.path.dirname(os.path.abspath(__file__))
@@ -61,6 +61,21 @@ DATA_DIR = _resolve_data_dir()
 RENDERS_DIR = os.path.join(DATA_DIR, "renders")
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 HISTORY_PATH = os.path.join(DATA_DIR, "history.json")
+LAST_SETTINGS_PATH = os.path.join(DATA_DIR, "last_settings.json")
+
+
+def _resolve_templates_path() -> str:
+    for c in (
+        os.path.join(DATA_DIR, "plenio_templates.json"),
+        os.path.join(APP_DIR, "data", "plenio_templates.json"),
+        os.path.join(BUNDLE_DIR, "data", "plenio_templates.json"),
+    ):
+        if os.path.isfile(c):
+            return c
+    return os.path.join(DATA_DIR, "plenio_templates.json")
+
+
+PLENIO_TEMPLATES_PATH = _resolve_templates_path()
 
 if sys.stdout is None or sys.stderr is None:
     _log_fh = open(os.path.join(DATA_DIR, "app.log"), "a", encoding="utf-8", buffering=1)
@@ -160,7 +175,7 @@ def get_workflow_nodes(conv: WorkflowConverter) -> dict[str, Any]:
         "sheet_score": 13, "take_seed": 14, "render": 15, "best_take": 16,
         "master": 17, "master_eq": "17:405", "master_loudness": "17:406",
         "preview": 18, "export": 19, "cover": 21, "cover_preview": 22,
-        "cover_seed": 23, "hq_mastering": 24, "refine": 14, "refine_model": 13, "stems": 1107,
+        "cover_seed": 23, "hq_mastering": 24, "loras": 25, "refine": 14, "refine_model": 13, "stems": 1107,
     }
     # Fallback to older 19-node layout if present
     if 19 not in nodes and 17 in nodes:
@@ -184,6 +199,8 @@ def get_workflow_nodes(conv: WorkflowConverter) -> dict[str, Any]:
             res["writer_model"] = nid
         elif ntype == "PlenioHQMastering":
             res["hq_mastering"] = nid
+        elif ntype == "PlenioLoras":
+            res["loras"] = nid
         elif ntype == "PlenioSongSheet":
             if "score" in title:
                 res["sheet_score"] = nid
@@ -215,7 +232,7 @@ def workflow_defaults() -> dict:
     conv = converter()
     wn = get_workflow_nodes(conv)
     brief = conv.widget_defaults(wn["brief"])
-    brief.setdefault("creativity", 50)
+    brief.setdefault("creativity", 100)
     export = conv.widget_defaults(wn["export"])
     sheet = conv.widget_defaults(wn["sheet_text"])
     cover = conv.widget_defaults(wn["cover"])
@@ -229,7 +246,8 @@ def workflow_defaults() -> dict:
         "brief": brief,
         "draft_seed": conv.widget_defaults(wn["draft_seed"]).get("seed"),
         "export": {k: export.get(k) for k in ("folder", "naming", "collision", "flac", "mp3", "wav", "tags",
-                                              "sheet_music", "sheet_music_size", "project_in_flac", "lyrics_srt")},
+                                              "sheet_music", "sheet_music_size", "project_in_flac", "lyrics_srt",
+                                              "lyrics_timing", "song_page")},
         "cover_size": cover.get("size", 1024),
         "writer_model": writer_model,
         "review": sheet.get("review"),
@@ -257,6 +275,10 @@ DEFAULT_BRIEF_OPTIONS: dict[str, list[str]] = {
         "sung",
         "sparse vocals",
         "instrumental",
+    ],
+    "vocals.lyrics_from": [
+        "written from the idea below",
+        "my own, sung as written below",
     ],
     "lyrics_fidelity": [
         "standard",
@@ -309,6 +331,14 @@ def brief_options() -> dict:
                         result["_audio_sr_models"] = sr_opts
     except Exception:
         pass
+    if "template" not in result or not result["template"]:
+        if os.path.isfile(PLENIO_TEMPLATES_PATH):
+            try:
+                tmpls = load_json(PLENIO_TEMPLATES_PATH, {})
+                if tmpls:
+                    result["template"] = ["none"] + sorted(tmpls.keys())
+            except Exception:
+                pass
     return result
 
 
@@ -746,36 +776,47 @@ _CREATIVITY_ANCHORS: dict[str, dict[int, tuple[float, float, int]]] = {
         0: (0.60, 0.95, 64),
         50: (0.80, 0.95, 64),
         100: (1.00, 0.95, 64),
+        200: (1.10, 0.95, 64),
+    },
+    "arrangement": {
+        0: (0.55, 0.95, 64),
+        50: (0.70, 0.95, 64),
+        100: (0.90, 0.95, 64),
+        200: (1.00, 0.95, 64),
     },
     "plan": {
         0: (0.55, 0.85, 20),
         50: (0.70, 0.90, 30),
         100: (0.92, 0.95, 50),
+        200: (1.00, 0.96, 64),
     },
     "take": {
         0: (0.90, 0.92, 60),
         50: (1.00, 0.95, 100),
         100: (1.10, 0.97, 150),
+        200: (1.15, 0.98, 200),
     },
 }
 
 
 def _extract_creativity(brief: dict | None) -> int:
     if not isinstance(brief, dict):
-        return 50
+        return 100
     val = brief.get("creativity")
     if val is None or str(val).strip() == "":
-        return 50
+        return 100
     try:
-        return max(0, min(100, round(float(val))))
+        return max(0, min(200, round(float(val))))
     except (TypeError, ValueError):
-        return 50
+        return 100
 
 
 def _creativity_sampling(creativity: int, stage: str) -> tuple[float, float, int]:
-    val = max(0, min(100, int(creativity)))
-    anchors = _CREATIVITY_ANCHORS[stage]
-    low, high = (0, 50) if val <= 50 else (50, 100)
+    val = max(0, min(200, int(creativity)))
+    anchors = _CREATIVITY_ANCHORS.get(stage) or _CREATIVITY_ANCHORS["take"]
+    points = sorted(anchors)
+    low = max(p for p in points[:-1] if p <= val)
+    high = points[points.index(low) + 1]
     share = (val - low) / (high - low)
     a_t, a_p, a_k = anchors[low]
     b_t, b_p, b_k = anchors[high]
@@ -804,7 +845,7 @@ def _coerce_brief(brief: dict) -> dict:
             if not supports_creativity:
                 continue
             try:
-                value = max(0, min(100, int(round(float(value)))))
+                value = max(0, min(200, int(round(float(value)))))
             except (TypeError, ValueError):
                 continue
         if key == "genre_closeness":
@@ -814,7 +855,11 @@ def _coerce_brief(brief: dict) -> dict:
                 continue
         if key == "lines_under_singing":
             value = bool(value)
-        if key in ("tempo", "description", "genre", "mood", "key", "meter", "vocals.theme", "lyrics_fidelity", "vocals") and not isinstance(value, str):
+        if key in (
+            "tempo", "description", "genre", "mood", "key", "meter",
+            "vocals.theme", "vocals.language", "vocals.voice",
+            "vocals.lyrics_from", "vocals.lyrics", "lyrics_fidelity", "vocals"
+        ) and not isinstance(value, str):
             value = str(value)
         out[key] = value
     return out
@@ -1016,9 +1061,13 @@ def build_render_prompt(conv: WorkflowConverter, req: dict, auto: bool) -> dict:
         unlinks[wn["sheet_text"]] = [k for k in docs]
 
     export = {k: v for k, v in (options.get("export") or {}).items() if v is not None}
-    for key in ("flac", "mp3", "wav", "project_in_flac", "lyrics_srt"):
+    for key in ("flac", "mp3", "wav", "project_in_flac", "lyrics_srt", "song_page"):
         if key in export:
             export[key] = bool(export[key])
+    if "lyrics_timing" not in export:
+        export["lyrics_timing"] = "the song"
+    if "song_page" not in export:
+        export["song_page"] = False
     overrides[wn["export"]] = export
 
     if options.get("writer_model"):
@@ -1036,6 +1085,26 @@ def build_render_prompt(conv: WorkflowConverter, req: dict, auto: bool) -> dict:
         if options.get("cover_size"):
             cover["size"] = int(options["cover_size"])
         overrides[wn["cover"]] = cover
+    else:
+        if wn.get("cover"):
+            modes[wn["cover"]] = 2
+        if wn.get("cover_preview"):
+            modes[wn["cover_preview"]] = 2
+        if wn.get("export"):
+            unlinks.setdefault(wn["export"], []).append("cover")
+
+    loras_nid = wn.get("loras")
+    if loras_nid is None:
+        for nid, node in conv.top.nodes.items():
+            if node.get("type") == "PlenioLoras":
+                loras_nid = nid
+                break
+    if loras_nid is not None and loras_nid in conv.top.nodes:
+        # Fallback for ComfyUI installations with older Plenio versions missing PlenioLoras:
+        # If PlenioLoras is not registered in ComfyUI, bypass it (mode 4) so MODEL and CLIP
+        # pass through cleanly from the YuE2 Model Loader without triggering HTTP 400.
+        if not bool(get_object_info("PlenioLoras")):
+            modes[loras_nid] = 4
     if options.get("stems") and wn.get("stems") in conv.top.nodes:
         modes[wn["stems"]] = 0
 
@@ -1241,7 +1310,11 @@ def start_draft(req: dict) -> dict:
     def finish(j):
         raw = j["results"][-1]["raw"]
         pick = lambda nid: ((raw.get(nid) or {}).get("text") or [""])[0]  # noqa: E731
-        j["draft"] = {"title": pick("d_title"), "style": pick("d_style"), "lyrics": pick("d_lyrics"),
+        lyrics_text = pick("d_lyrics")
+        raw_brief = req.get("brief") or {}
+        if raw_brief.get("vocals.lyrics_from") == "my own, sung as written below" and raw_brief.get("vocals.lyrics"):
+            lyrics_text = raw_brief["vocals.lyrics"].strip()
+        j["draft"] = {"title": pick("d_title"), "style": pick("d_style"), "lyrics": lyrics_text,
                       "artwork_prompt": pick("d_artwork")}
         if not j["draft"]["lyrics"]:
             raise ComfyError(_tr(
@@ -1406,55 +1479,75 @@ def build_subtitles_for_audio(audio_url: str, local_audio_path: str | None = Non
     if not srt_text and sung_srt_text:
         srt_text = sung_srt_text
 
+    # Validate srt_text alignment: if the first cue is suspiciously delayed (> 38s) or misaligned,
+    # trigger local Whisper alignment on the actual audio file to ensure lyrics sync properly in the player.
+    if srt_text and base_path and os.path.isfile(base_path):
+        try:
+            cues = srt_translate.parse_srt(srt_text)
+            if cues:
+                t0_str = cues[0]["time"].split("-->")[0].strip()
+                t0 = srt_translate.parse_srt_timestamp(t0_str)
+                if t0 > 38.0 and len(cues) > 3:
+                    print(f"[Subtitles] Note: ComfyUI SRT cue begins late ({t0:.1f}s), re-aligning with local Whisper...")
+                    w_srt = srt_translate.align_lyrics_with_whisper(base_path, fallback_lyrics=fallback_lyrics)
+                    if w_srt:
+                        srt_text = w_srt
+        except Exception as ex:
+            print(f"[Subtitles] Note: SRT validation check skipped: {ex}")
+
     if not srt_text or not base_path:
         return []
 
+    resolve_srt_text = None
+    try:
+        if base_path and os.path.isfile(base_path):
+            resolve_srt_text = srt_translate.extract_srt_from_flac(base_path, fallback_lyrics=fallback_lyrics, resolve_mode=True)
+    except Exception as ex:
+        print("[Subtitles] Resolve cut-exact extraction note:", ex)
+
+    if target_lang == "auto":
+        target_lang = srt_translate.get_auto_translation_target(fallback_lyrics or srt_text or "")
+
     out = srt_translate.generate_translated_srt_files(
-        srt_text, base_path, target_lang=target_lang, extra_output_dir=extra_out_dir
+        srt_text, base_path, target_lang=target_lang, extra_output_dir=extra_out_dir,
+        resolve_srt_text=resolve_srt_text
     )
+    # Determine clean language flags
+    orig_lang = srt_translate.detect_lyrics_language(fallback_lyrics or srt_text)
+    orig_label = "🇩🇪 Original (.srt)" if orig_lang == "de" else "🇬🇧 Original (.srt)"
+
     items = []
-    for role, label, key in (
-        ("en", "🇬🇧 English (.srt)", "en_srt"),
-        ("bilingual", "🇩🇪+🇬🇧 Bilingual (.srt)", "bilingual_srt"),
-        ("orig", "🇩🇪 Original (.srt)", "orig_srt"),
-    ):
-        p = out.get(key)
-        if not p or not os.path.isfile(p):
-            continue
-        bn = os.path.basename(p)
+    # 1. DaVinci Resolve (cut-exact, zero-overlap)
+    if out.get("resolve_srt") and os.path.isfile(out["resolve_srt"]):
+        bn = os.path.basename(out["resolve_srt"])
         items.append({
-            "node": "srt",
-            "kind": "subtitle",
-            "role": role,
-            "label": label,
-            "name": bn,
+            "node": "srt", "kind": "subtitle", "role": "resolve",
+            "label": "🎬 DaVinci Resolve (.resolve.srt)", "name": bn,
             "url": f"/api/view?filename={urllib.parse.quote(bn)}&source=local&download=1",
             "temp": False,
         })
 
-    # Save and expose distinct sung subtitle if available
-    if sung_srt_text and sung_srt_text.strip() != srt_text.strip():
-        stem_path = os.path.splitext(base_path)[0]
-        sung_path = f"{stem_path} (sung).srt"
-        try:
-            with open(sung_path, "w", encoding="utf-8") as sfh:
-                sfh.write(sung_srt_text)
-            if extra_out_dir:
-                ext_sung = os.path.join(extra_out_dir, os.path.basename(sung_path))
-                with open(ext_sung, "w", encoding="utf-8") as sfh:
-                    sfh.write(sung_srt_text)
-            sung_bn = os.path.basename(sung_path)
-            items.insert(0, {
-                "node": "srt",
-                "kind": "subtitle",
-                "role": "sung",
-                "label": "🎤 Wie gesungen (.srt)",
-                "name": sung_bn,
-                "url": f"/api/view?filename={urllib.parse.quote(sung_bn)}&source=local&download=1",
-                "temp": False,
-            })
-        except Exception as ex:
-            print(f"[Subtitles] Note: writing sung srt skipped: {ex}")
+    # 2. Original language reading version
+    if out.get("orig_srt") and os.path.isfile(out["orig_srt"]):
+        bn = os.path.basename(out["orig_srt"])
+        items.append({
+            "node": "srt", "kind": "subtitle", "role": "orig",
+            "label": orig_label, "name": bn,
+            "url": f"/api/view?filename={urllib.parse.quote(bn)}&source=local&download=1",
+            "temp": False,
+        })
+
+    # 3. Optional single translation
+    if out.get("trans_srt") and os.path.isfile(out["trans_srt"]):
+        t_lang = out.get("target_lang", "en")
+        t_label = "🇬🇧 English (.srt)" if t_lang == "en" else ("🇩🇪 Deutsch (.srt)" if t_lang == "de" else f"🌐 {t_lang.upper()} (.srt)")
+        bn = os.path.basename(out["trans_srt"])
+        items.append({
+            "node": "srt", "kind": "subtitle", "role": "trans",
+            "label": t_label, "name": bn,
+            "url": f"/api/view?filename={urllib.parse.quote(bn)}&source=local&download=1",
+            "temp": False,
+        })
 
     return items
 
@@ -1548,6 +1641,12 @@ def start_render(req: dict) -> dict:
     job = new_job("render", count)
 
     def finish(j):
+        has_any_audio = any(m.get("kind") == "audio" for res in j["results"] for m in res.get("media", []))
+        if not has_any_audio:
+            raise ComfyError(_tr(
+                "ComfyUI did not produce an audio output. Please check the workflow or ComfyUI logs.",
+                "ComfyUI hat keine Audiodatei erzeugt. Bitte den Workflow oder die ComfyUI-Logs prüfen.",
+            ))
         history = load_json(HISTORY_PATH, [])
         options = req.get("options") or {}
         vswap = options.get("voice_swap")
@@ -1601,7 +1700,7 @@ def start_render(req: dict) -> dict:
                 try:
                     j["phase"] = "phase.translating_srt"
                     req_lyrics = (req.get("sheet") or {}).get("lyrics")
-                    t_lang = "en" if want_srt_en else None
+                    t_lang = srt_translate.get_auto_translation_target(req_lyrics or "") if want_srt_en else None
                     sub_items = build_subtitles_for_audio(audio[0]["url"], tmp_song, target_lang=t_lang, fallback_lyrics=req_lyrics)
                     res["media"].extend(sub_items)
                 except Exception as ex:
@@ -2196,10 +2295,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True})
             if path == "/api/status":
                 return self._json(self._status())
+            if path == "/api/changelog":
+                return self._json(self._get_changelog())
             if path == "/api/defaults":
                 return self._json(workflow_defaults())
             if path == "/api/options":
                 return self._json(brief_options())
+            if path == "/api/templates":
+                return self._json(load_json(PLENIO_TEMPLATES_PATH, {}))
+            if path == "/api/last_settings":
+                return self._json(load_json(LAST_SETTINGS_PATH, {}))
             if path == "/api/config":
                 return self._json(config())
             if path == "/api/voice_models":
@@ -2251,6 +2356,14 @@ class Handler(BaseHTTPRequestHandler):
                 })
 
             body = self._body()
+            if path in ("/api/draft", "/api/render"):
+                try:
+                    save_json(LAST_SETTINGS_PATH, {
+                        "brief": body.get("brief", {}),
+                        "opts": body.get("options", {}),
+                    })
+                except Exception:
+                    pass
             if path == "/api/draft":
                 return self._json(public_job(start_draft(body)))
             if path == "/api/render":
@@ -2269,6 +2382,9 @@ class Handler(BaseHTTPRequestHandler):
                     client().interrupt()
                 except ComfyError:
                     pass
+                return self._json({"ok": True})
+            if path == "/api/last_settings":
+                save_json(LAST_SETTINGS_PATH, body if isinstance(body, dict) else {})
                 return self._json({"ok": True})
             if path == "/api/config":
                 config().update({k: v for k, v in body.items() if k in DEFAULT_CONFIG})
@@ -2317,10 +2433,19 @@ class Handler(BaseHTTPRequestHandler):
     def _status(self) -> dict:
         alive = client().is_alive()
         wf_ok = os.path.exists(workflow_path())
-        plenio_api = bool(client().has_plenio_api()) if alive else False
+        plenio_api = False
+        plenio_ver = None
+        if alive:
+            try:
+                p_info = client().plenio_info()
+                if isinstance(p_info, dict):
+                    plenio_api = True
+                    plenio_ver = p_info.get("plenio")
+            except Exception:
+                plenio_api = bool(client().has_plenio_api())
         info = {"version": APP_VERSION, "comfy": alive, "workflow": wf_ok, "workflow_path": workflow_path(), "comfy_url": config()["comfy_url"],
                 "can_start": bool(config().get("comfy_start_command")), "plenio_player": bool(find_plenio_player_bat()),
-                "plenio_api": plenio_api,
+                "plenio_api": plenio_api, "plenio_version": plenio_ver,
                 "ffmpeg": bool(shutil.which("ffmpeg"))}
         if alive:
             try:
@@ -2533,6 +2658,24 @@ class Handler(BaseHTTPRequestHandler):
         subprocess.Popen(cmd, shell=True, cwd=cwd, creationflags=flags)
         return {"started": True}
 
+    def _get_changelog(self) -> dict:
+        cand_dirs = [
+            APP_DIR,
+            os.path.dirname(APP_DIR),
+            BASE_DIR if "BASE_DIR" in globals() else "",
+        ]
+        for cdir in cand_dirs:
+            if not cdir:
+                continue
+            cand = os.path.join(cdir, "CHANGELOG.md")
+            if os.path.isfile(cand):
+                try:
+                    with open(cand, "r", encoding="utf-8") as f:
+                        return {"content": f.read()}
+                except OSError as ex:
+                    return {"content": f"Fehler beim Lesen der CHANGELOG.md: {ex}"}
+        return {"content": "# Changelog\n\nKeine CHANGELOG.md gefunden."}
+
     def _launch_plenio_player(self) -> dict:
         bat = find_plenio_player_bat()
         if not bat:
@@ -2544,7 +2687,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _translate_srt(self, body: dict) -> dict:
         audio_url = body.get("audio_url") or ""
-        target_lang = body.get("target_lang") or "en"
+        target_lang = body.get("target_lang")
+        if not target_lang or target_lang == "auto":
+            target_lang = srt_translate.get_auto_translation_target(fallback_lyrics or "")
         fallback_lyrics = None
         history = load_json(HISTORY_PATH, [])
         for h in history:
@@ -2846,7 +2991,7 @@ def run_native_window(url: str, server: ThreadingHTTPServer) -> bool:
         threading.Thread(target=server.serve_forever, daemon=True).start()
         bg = "#f3f4f8" if config().get("theme") == "light" else "#0f1117"
         webview.create_window(
-            f"thomo.ART MusicMaker v{APP_VERSION} (CodexMundi Edition)",
+            f"thomo.ART MusicMaker v{APP_VERSION} (Lantern House Edition)",
             url,
             width=1360,
             height=920,
@@ -2856,7 +3001,13 @@ def run_native_window(url: str, server: ThreadingHTTPServer) -> bool:
         icon_path = os.path.join(BUNDLE_DIR, "app.ico")
         if not os.path.isfile(icon_path):
             icon_path = os.path.join(APP_DIR, "app.ico")
-        webview.start(icon=icon_path if os.path.isfile(icon_path) else None)
+        webview_storage = os.path.join(DATA_DIR, "webview")
+        os.makedirs(webview_storage, exist_ok=True)
+        webview.start(
+            icon=icon_path if os.path.isfile(icon_path) else None,
+            private_mode=False,
+            storage_path=webview_storage,
+        )
         server.shutdown()
         server.server_close()
         return True

@@ -13,7 +13,8 @@ __pycache__/
 *.log
 
 # Local User Data, Media & Models
-data/
+data/*
+!data/plenio_templates.json
 media/
 models/
 scratch/
