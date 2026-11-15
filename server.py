@@ -34,7 +34,7 @@ from workflow_converter import ConversionError, WorkflowConverter, load_workflow
 import srt_translate
 import voice_swap
 
-APP_VERSION = "1.08"
+APP_VERSION = "1.32"
 IS_FROZEN = getattr(sys, "frozen", False)
 BUNDLE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 APP_DIR = os.path.dirname(os.path.abspath(sys.executable)) if IS_FROZEN else os.path.dirname(os.path.abspath(__file__))
@@ -239,9 +239,12 @@ def workflow_defaults() -> dict:
     raw_writer = None
     if wn.get("writer_model") and wn["writer_model"] in conv.top.nodes:
         raw_writer = conv.widget_defaults(wn["writer_model"]).get("model")
-    if not raw_writer and wn.get("writer") and wn["writer"] in conv.top.nodes:
+        writer_model = resolve_model_field_value("PlenioWriterChoice", "model", raw_writer)
+    elif wn.get("writer") and wn["writer"] in conv.top.nodes:
         raw_writer = conv.widget_defaults(wn["writer"]).get("clip_name")
-    writer_model = resolve_model_field_value("CLIPLoader", "clip_name", raw_writer)
+        writer_model = resolve_model_field_value("CLIPLoader", "clip_name", raw_writer)
+    else:
+        writer_model = resolve_model_field_value("CLIPLoader", "clip_name", raw_writer)
     return {
         "brief": brief,
         "draft_seed": conv.widget_defaults(wn["draft_seed"]).get("seed"),
@@ -480,10 +483,24 @@ def resolve_model_field_value(class_type: str, field_name: str, current_val: Any
     if not isinstance(current_val, str) or not current_val:
         return current_val
     choices = get_field_choices(class_type, field_name, node_inputs)
-    if not choices:
-        return current_val
-    matched = _match_choice(choices, current_val)
-    return matched if matched is not None else current_val
+    if choices:
+        matched = _match_choice(choices, current_val)
+        if matched is not None:
+            return matched
+        if class_type == "PlenioWriterChoice" and field_name == "model":
+            if "auto" in current_val.lower() and current_val not in choices:
+                for ch in choices:
+                    if "gemma4" in ch.lower() or "e4b" in ch.lower():
+                        print(f"[Model Resolver] PlenioWriterChoice fallback: '{current_val}' -> '{ch}'")
+                        return ch
+                if choices:
+                    print(f"[Model Resolver] PlenioWriterChoice fallback: '{current_val}' -> '{choices[0]}'")
+                    return choices[0]
+    else:
+        if class_type == "PlenioWriterChoice" and field_name == "model":
+            if "auto" in current_val.lower():
+                return "gemma4_e4b_it_fp8_scaled.safetensors"
+    return current_val
 
 
 def resolve_prompt_models(prompt: dict) -> dict:
@@ -533,6 +550,16 @@ KNOWN_MODELS: dict[str, dict[str, str]] = {
         "name": "gemma4_e4b_it_fp8_scaled.safetensors",
         "url": "https://huggingface.co/Comfy-Org/gemma-4/resolve/main/text_encoders/gemma4_e4b_it_fp8_scaled.safetensors",
         "directory": "text_encoders",
+    },
+    "gemma-4-12b-it-qat-ud-q4_k_xl.gguf": {
+        "name": "gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
+        "url": "https://huggingface.co/unsloth/gemma-4-12B-it-qat-GGUF/resolve/main/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
+        "directory": "LLM",
+    },
+    "gemma-4-12b-it-q6_k.gguf": {
+        "name": "gemma-4-12b-it-Q6_K.gguf",
+        "url": "https://huggingface.co/unsloth/gemma-4-12b-it-GGUF/resolve/main/gemma-4-12b-it-Q6_K.gguf",
+        "directory": "LLM",
     },
     "flux-2-klein-4b.safetensors": {
         "name": "flux-2-klein-4b.safetensors",
@@ -1281,6 +1308,28 @@ def collect_outputs(entry: dict) -> dict:
     return {"media": media, "texts": texts}
 
 
+def _is_best_take_asr_dataclass_error(err: Exception) -> bool:
+    """Detect the Plenio Best-Take Qwen3-ASR dataclass/@strict mismatch on older transformers."""
+    msg = str(err).lower()
+    return "must be a dataclass before applying @strict" in msg and (
+        "qwen3asr" in msg or "plenio.workers.asr" in msg or "best take" in msg
+    )
+
+
+def _downgrade_prompt_to_standard_fidelity(prompt: dict) -> bool:
+    """Switch lyrics_fidelity in a ComfyUI prompt to 'standard' so Best Take skips ASR."""
+    changed = False
+    for node in prompt.values():
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs")
+        if isinstance(inputs, dict) and "lyrics_fidelity" in inputs:
+            if inputs["lyrics_fidelity"] != "standard":
+                inputs["lyrics_fidelity"] = "standard"
+                changed = True
+    return changed
+
+
 def run_job(job: dict, prompts: list[dict], req: dict, finish) -> None:
     job["status"] = "running"
     try:
@@ -1288,7 +1337,22 @@ def run_job(job: dict, prompts: list[dict], req: dict, finish) -> None:
             job["run"] = index + 1
             ensure_prompt_models(prompt, job)
             resolve_prompt_models(prompt)
-            entry = client().run_prompt(prompt, _progress_handler(job, prompt), lambda: job["cancel"])
+            try:
+                entry = client().run_prompt(prompt, _progress_handler(job, prompt), lambda: job["cancel"])
+            except ComfyError as err:
+                if (
+                    not job["cancel"]
+                    and _is_best_take_asr_dataclass_error(err)
+                    and _downgrade_prompt_to_standard_fidelity(prompt)
+                ):
+                    job["phase"] = "phase.render"
+                    job["detail"] = _tr(
+                        "Best-take ASR incompatible in ComfyUI — retrying with standard fidelity…",
+                        "Textprüfung in ComfyUI veraltet — rendere automatisch im Standard-Modus…",
+                    )
+                    entry = client().run_prompt(prompt, _progress_handler(job, prompt), lambda: job["cancel"])
+                else:
+                    raise
             job["results"].append({"run": index + 1, **collect_outputs(entry), "raw": entry.get("outputs", {})})
         job["progress"] = 1.0
         job["phase"] = "phase.done"
@@ -1453,26 +1517,46 @@ def build_subtitles_for_audio(audio_url: str, local_audio_path: str | None = Non
         tp = qs.get("type", ["output"])[0]
         stem = os.path.splitext(fn)[0]
         base_path = base_path or os.path.join(RENDERS_DIR, os.path.basename(fn))
-        # Try fetching `<stem> (lines).srt` and `<stem> (sung).srt` directly from ComfyUI output
-        if not srt_text:
-            try:
-                raw_srt, _ = client().view(f"{stem} (lines).srt", sub, tp)
-                srt_text = raw_srt.decode("utf-8", errors="replace")
-            except Exception:
-                pass
+        # Try fetching `<stem> (sung).srt` and `<stem> (lines).srt` directly from ComfyUI output
         if not sung_srt_text:
             try:
                 raw_sung, _ = client().view(f"{stem} (sung).srt", sub, tp)
                 sung_srt_text = raw_sung.decode("utf-8", errors="replace")
             except Exception:
                 pass
-        if not srt_text and not sung_srt_text:
-            # Fallback: fetch the FLAC and read its embedded Plenio timing block
+        if sung_srt_text and fallback_lyrics and not srt_text:
+            try:
+                parsed_sung = []
+                for cue in srt_translate.parse_srt(sung_srt_text):
+                    parts = str(cue.get("time") or "").split("-->")
+                    if len(parts) == 2:
+                        parsed_sung.append({
+                            "start": srt_translate.parse_srt_timestamp(parts[0]),
+                            "end": srt_translate.parse_srt_timestamp(parts[1]),
+                            "text": str(cue.get("text") or "").replace("\n", " ").strip(),
+                        })
+                all_lines = [
+                    ln.strip() for ln in fallback_lyrics.splitlines()
+                    if ln.strip() and not (ln.strip().startswith("[") and ln.strip().endswith("]"))
+                ]
+                if parsed_sung and all_lines:
+                    srt_text = srt_translate._build_sung_corrected_srt(parsed_sung, all_lines)
+            except Exception:
+                pass
+        if not srt_text:
+            # Prefer vocal-isolated Forced Alignment from the actual audio file + known lyrics
             try:
                 if not os.path.isfile(base_path):
                     fetch_audio_to_file(audio_url, base_path)
                 srt_text = srt_translate.extract_srt_from_flac(base_path, fallback_lyrics=fallback_lyrics)
-                sung_srt_text = srt_translate.extract_sung_srt_from_flac(base_path)
+                if not sung_srt_text:
+                    sung_srt_text = srt_translate.extract_sung_srt_from_flac(base_path)
+            except Exception:
+                pass
+        if not srt_text:
+            try:
+                raw_srt, _ = client().view(f"{stem} (lines).srt", sub, tp)
+                srt_text = raw_srt.decode("utf-8", errors="replace")
             except Exception:
                 pass
 
@@ -1625,6 +1709,125 @@ def start_voice_swap(req: dict) -> dict:
             save_json(HISTORY_PATH, history[:200])
 
         except Exception as err:
+            traceback.print_exc()
+            job["status"] = "error"
+            job["error"] = str(err)
+
+    threading.Thread(target=worker, daemon=True).start()
+    return job
+
+
+def start_plenio_v2_job(req: dict) -> dict:
+    """Runs an Enhance & Master or YuE2 Cover job via Plenio 2.0 Song API v2."""
+    template = (req.get("template") or "").strip()
+    if template not in ("enhance-master", "yue2-cover"):
+        raise ValueError(f"Unsupported Plenio v2 template: {template}")
+    if not client().is_alive() or not client().plenio_v2_info():
+        raise ComfyError(_tr(
+            "Plenio 2.0 Song API v2 is required for this feature.",
+            "Für diese Funktion wird Plenio 2.0 (Song API v2) in ComfyUI benötigt.",
+        ))
+    audio_b64 = req.get("audio_b64") or ""
+    audio_name = os.path.basename(req.get("audio_name") or "source.mp3")
+    if not audio_b64:
+        raise ValueError(_tr("No audio file provided.", "Keine Audiodatei ausgewählt."))
+    if "," in audio_b64 and audio_b64.startswith("data:"):
+        audio_b64 = audio_b64.split(",", 1)[1]
+    raw_bytes = base64.b64decode(audio_b64)
+
+    job = new_job(f"v2_{template}", 1)
+    fields = dict(req.get("fields") or {})
+    stems = bool(req.get("stems", False))
+    title_hint = (req.get("title") or os.path.splitext(audio_name)[0] or template).strip()
+
+    def worker():
+        try:
+            job["status"] = "running"
+            job["phase"] = "phase.preparing"
+            job["progress"] = 0.05
+            up = client().plenio_v2_upload(audio_name, raw_bytes)
+            fields["source.audio"] = up.get("name") or audio_name
+            payload = {"template": template, "fields": fields, "stems": stems}
+            v2_job = client().plenio_v2_create_job(payload)
+            v2_id = v2_job.get("id")
+            if not v2_id:
+                raise ComfyError(f"Plenio v2 did not return job id: {v2_job}")
+
+            while True:
+                if job.get("cancel"):
+                    client().plenio_v2_cancel_job(v2_id)
+                    job["status"] = "cancelled"
+                    return
+                cur = client().plenio_v2_get_job(v2_id)
+                st = cur.get("status")
+                prog = cur.get("progress") or {}
+                if isinstance(prog, dict) and isinstance(prog.get("fraction"), (int, float)):
+                    job["progress"] = max(0.05, min(0.95, float(prog["fraction"])))
+                stage = cur.get("stage") or {}
+                if isinstance(stage, dict) and stage.get("label"):
+                    job["phase"] = stage["label"]
+                if st == "succeeded":
+                    break
+                if st in ("failed", "cancelled"):
+                    err = cur.get("error") or {}
+                    msg = err.get("message") if isinstance(err, dict) else str(err)
+                    if st == "cancelled":
+                        job["status"] = "cancelled"
+                        return
+                    raise ComfyError(msg or f"Plenio v2 job {st}")
+                time.sleep(1.5)
+
+            os.makedirs(RENDERS_DIR, exist_ok=True)
+            files = (cur.get("result") or {}).get("files") or []
+            media = []
+            ts_tag = int(time.time())
+            for f in files:
+                fname = f.get("name")
+                if not fname:
+                    continue
+                data = client().plenio_v2_download_file(v2_id, fname)
+                safe_name = f"v2_{ts_tag}_{os.path.basename(fname)}"
+                out_path = os.path.join(RENDERS_DIR, safe_name)
+                with open(out_path, "wb") as fh:
+                    fh.write(data)
+                ext = os.path.splitext(safe_name)[1].lower()
+                kind = "audio" if ext in AUDIO_EXT else ("image" if ext in IMAGE_EXT else ("subtitle" if ext == ".srt" else "other"))
+                if kind in ("audio", "image", "subtitle"):
+                    item = {
+                        "node": "plenio_v2",
+                        "kind": kind,
+                        "name": safe_name,
+                        "url": f"/api/view?filename={urllib.parse.quote(safe_name)}&source=local" + ("&download=1" if kind == "subtitle" else ""),
+                        "temp": False,
+                    }
+                    stem_info = _detect_stem_role_label(safe_name) if kind == "audio" else None
+                    if stem_info:
+                        item["role"], item["label"] = stem_info
+                    media.append(item)
+
+            if not any(m["kind"] == "audio" for m in media):
+                raise ComfyError(_tr("No audio returned by Plenio v2.", "Plenio v2 hat keine Audiodatei geliefert."))
+
+            job["results"] = [{"media": media, "texts": [], "record": None}]
+            job["progress"] = 1.0
+            job["phase"] = "phase.done"
+            job["status"] = "done"
+
+            history = load_json(HISTORY_PATH, [])
+            prefix = "✨ " if template == "enhance-master" else "🎤 "
+            history.insert(0, {
+                "id": uuid.uuid4().hex[:10],
+                "ts": int(time.time()),
+                "title": f"{prefix}{title_hint}",
+                "brief": fields if template == "yue2-cover" else None,
+                "sheet": None,
+                "options": {"plenio_v2": template, "stems": stems},
+                "media": media,
+                "texts": [],
+                "auto": False,
+            })
+            save_json(HISTORY_PATH, history[:200])
+        except Exception as err:  # noqa: BLE001
             traceback.print_exc()
             job["status"] = "error"
             job["error"] = str(err)
@@ -1934,7 +2137,20 @@ def render_video_ffmpeg(audio_url: str, title: str = "Song", aspect: str = "16:9
 
     srt_tmp = None
     is_temp_srt = False
-    if srt_url:
+    is_translated_srt = bool(srt_url and re.search(r"\([a-z]{2}\)\.srt|\.[a-z]{2}\.srt", srt_url, re.IGNORECASE))
+    if include_subtitles and audio_tmp and os.path.isfile(audio_tmp) and not is_translated_srt:
+        # Always prefer vocal-isolated Forced Alignment from the actual audio file + lyrics
+        try:
+            auto_srt = srt_translate.extract_srt_from_flac(audio_tmp)
+            if auto_srt:
+                srt_tmp = os.path.join(RENDERS_DIR, f"temp_vid_sub_{ts}.srt")
+                with open(srt_tmp, "w", encoding="utf-8") as sfh:
+                    sfh.write(auto_srt)
+                is_temp_srt = True
+        except Exception as ex:
+            print(f"[Video Render] Auto-extract subtitles from audio FLAC skipped: {ex}")
+
+    if srt_url and not (srt_tmp and os.path.isfile(srt_tmp)):
         try:
             srt_tmp = os.path.join(RENDERS_DIR, f"temp_vid_sub_{ts}.srt")
             fetch_audio_to_file(srt_url, srt_tmp)
@@ -2260,6 +2476,31 @@ def delete_history_item(del_id: str) -> dict:
 
 # --------------------------------------------------------------------- HTTP
 
+def _detect_stem_role_label(name: str) -> tuple[str, str] | None:
+    fn = name.lower()
+    if "(vocals)" in fn or fn.endswith("vocals.flac") or fn.endswith("vocals.wav"):
+        return "stem_vocals", "🎤 Vocals"
+    if "(drums)" in fn or fn.endswith("drums.flac") or fn.endswith("drums.wav"):
+        return "stem_drums", "🥁 Drums"
+    if "(bass)" in fn or fn.endswith("bass.flac") or fn.endswith("bass.wav"):
+        return "stem_bass", "🎸 Bass"
+    if "(other)" in fn or "(rest)" in fn or fn.endswith("other.flac") or fn.endswith("other.wav"):
+        return "stem_other", "🎹 Other"
+    if "(instrumental)" in fn or fn.endswith("instrumental.flac") or fn.endswith("instrumental.wav"):
+        return "stem_instrumental", "🎼 Instrumental"
+    if "(original)" in fn or "(raw)" in fn:
+        return "stem_raw", "📼 Take (Raw)"
+    return None
+
+
+def _clean_song_base(name: str) -> str:
+    clean = re.sub(r"^render_[a-f0-9]+_", "", name.lower())
+    clean = re.sub(r"^input_[a-f0-9]+_", "", clean)
+    clean = re.sub(r"\.(flac|mp3|wav|ogg|m4a)$", "", clean)
+    clean = re.sub(r"\s*\((vocals|drums|bass|other|rest|original|raw|instrumental)\)$", "", clean, flags=re.I).strip()
+    return clean
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -2313,6 +2554,10 @@ class Handler(BaseHTTPRequestHandler):
                     "available": voice_swap.get_applio_paths()["available"],
                     "models": voice_swap.list_voice_models(models_dir),
                 })
+            if path == "/api/plenio/models":
+                return self._json(self._plenio_models())
+            if path == "/api/plenio/presets":
+                return self._json(self._plenio_presets())
             if path.startswith("/api/job/"):
                 job = JOBS.get(path.rsplit("/", 1)[1])
                 return self._json(public_job(job)) if job else self._fail("Unknown job", 404)
@@ -2320,6 +2565,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(self._get_history())
             if path == "/api/fonts":
                 return self._json(get_fonts_payload())
+            if path == "/api/last_saved":
+                return self._json({"path": STATE.get("last_saved_path", ""), "ts": STATE.get("last_saved_ts", 0)})
             if path == "/api/font_file":
                 return self._font_file(query)
             if path == "/api/view":
@@ -2372,6 +2619,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(public_job(start_new_take(body)))
             if path == "/api/voice_swap":
                 return self._json(public_job(start_voice_swap(body)))
+            if path == "/api/plenio/v2/job":
+                return self._json(public_job(start_plenio_v2_job(body)))
             if path == "/api/translate_srt":
                 return self._json(self._translate_srt(body))
             if path == "/api/cancel":
@@ -2392,6 +2641,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(config())
             if path == "/api/comfy/start":
                 return self._json(self._start_comfy())
+            if path == "/api/browse_start_cmd":
+                return self._json(self._browse_start_cmd(body))
+            if path == "/api/comfy/fix_transformers":
+                return self._json(self._fix_comfy_transformers())
+            if path == "/api/reveal_file":
+                fpath = str(body.get("path") or "").strip()
+                if not fpath or not os.path.exists(fpath):
+                    return self._json({"ok": False, "error": "File not found"})
+                subprocess.Popen(["explorer", "/select,", os.path.normpath(fpath)])
+                return self._json({"ok": True})
+            if path == "/api/open_file":
+                fpath = str(body.get("path") or "").strip()
+                if not fpath or not os.path.isfile(fpath):
+                    return self._json({"ok": False, "error": "File not found"})
+                os.startfile(os.path.normpath(fpath))  # type: ignore[attr-defined]
+                return self._json({"ok": True})
             if path == "/api/plenio_player/launch":
                 return self._json(self._launch_plenio_player())
             if path == "/api/video/render":
@@ -2430,10 +2695,38 @@ class Handler(BaseHTTPRequestHandler):
             self._fail(str(err), 500)
 
     # handlers
+    def _plenio_models(self) -> dict:
+        if not client().is_alive():
+            return {"supported": False, "reason": "offline", "models": []}
+        res = client().plenio_models()
+        if isinstance(res, dict) and isinstance(res.get("models"), list):
+            return {"supported": True, "models": res["models"]}
+        return {"supported": False, "reason": "unsupported", "models": []}
+
+    def _plenio_presets(self) -> dict:
+        builtin = [
+            {"id": "sketch", "name": "Quick sketch", "text": "About 1:00, no cover art - fastest way to hear an idea",
+             "fields": {"finish.hq_mastering": False, "finish.cover_art": False, "lyrics_fidelity": "standard", "length": "very short (about 1:00)"}},
+            {"id": "party", "name": "Party - fast", "text": "About 1:30 with cover art, ready in a few minutes",
+             "fields": {"finish.hq_mastering": False, "finish.cover_art": True, "lyrics_fidelity": "standard", "length": "short (about 1:30)"}},
+            {"id": "full", "name": "Full song", "text": "About 3:00, HQ mastering, cover art, better of two takes",
+             "fields": {"finish.hq_mastering": True, "finish.cover_art": True, "lyrics_fidelity": "high - best of 2 takes", "length": "standard (about 3:00)"}},
+            {"id": "best", "name": "Best quality", "text": "HQ mastering, cover art, best of three takes - takes longest",
+             "fields": {"finish.hq_mastering": True, "finish.cover_art": True, "lyrics_fidelity": "highest - best of 3 takes"}},
+            {"id": "instrumental", "name": "Instrumental", "text": "No singing - for background, video or game",
+             "fields": {"finish.cover_art": True, "vocals": "instrumental"}},
+        ]
+        if client().is_alive():
+            live = client().plenio_presets()
+            if live:
+                return {"source": "plenio", "presets": live}
+        return {"source": "builtin", "presets": builtin}
+
     def _status(self) -> dict:
         alive = client().is_alive()
         wf_ok = os.path.exists(workflow_path())
         plenio_api = False
+        plenio_api_v2 = False
         plenio_ver = None
         if alive:
             try:
@@ -2441,11 +2734,13 @@ class Handler(BaseHTTPRequestHandler):
                 if isinstance(p_info, dict):
                     plenio_api = True
                     plenio_ver = p_info.get("plenio")
+                    if plenio_ver and str(plenio_ver).startswith("2."):
+                        plenio_api_v2 = bool(client().plenio_v2_info())
             except Exception:
                 plenio_api = bool(client().has_plenio_api())
         info = {"version": APP_VERSION, "comfy": alive, "workflow": wf_ok, "workflow_path": workflow_path(), "comfy_url": config()["comfy_url"],
                 "can_start": bool(config().get("comfy_start_command")), "plenio_player": bool(find_plenio_player_bat()),
-                "plenio_api": plenio_api, "plenio_version": plenio_ver,
+                "plenio_api": plenio_api, "plenio_api_v2": plenio_api_v2, "plenio_version": plenio_ver,
                 "ffmpeg": bool(shutil.which("ffmpeg"))}
         if alive:
             try:
@@ -2469,6 +2764,10 @@ class Handler(BaseHTTPRequestHandler):
         candidate_renders_dirs = [
             RENDERS_DIR,
             os.path.join(APP_DIR, "data", "renders"),
+            os.path.join(APP_DIR, "media"),
+            os.path.join(os.path.dirname(APP_DIR), "media"),
+            os.path.join(APP_DIR, "dist", "data", "renders"),
+            os.path.join(os.path.dirname(APP_DIR), "dist", "data", "renders"),
         ]
         for r_dir in candidate_renders_dirs:
             if os.path.isdir(r_dir):
@@ -2576,6 +2875,32 @@ class Handler(BaseHTTPRequestHandler):
                                 changed = True
                         h["media"] = media
 
+            # Attach any existing stems for this song from all_local_files_map
+            audio_items = [m for m in (h.get("media") or []) if m.get("kind") == "audio"]
+            if audio_items:
+                root_base = _clean_song_base(audio_items[0].get("name", ""))
+                existing_names = {m.get("name", "").lower() for m in audio_items}
+                for rf in renders_files:
+                    if not rf.lower().endswith(tuple(AUDIO_EXT)):
+                        continue
+                    if rf.lower() in existing_names:
+                        continue
+                    if _clean_song_base(rf) == root_base:
+                        stem_info = _detect_stem_role_label(rf)
+                        if stem_info:
+                            role, label = stem_info
+                            h.setdefault("media", []).append({
+                                "node": "audio",
+                                "kind": "audio",
+                                "role": role,
+                                "label": label,
+                                "name": rf,
+                                "url": f"/api/view?filename={urllib.parse.quote(rf)}&source=local",
+                                "temp": False,
+                            })
+                            existing_names.add(rf.lower())
+                            changed = True
+
         # 4. Auto-recover any uncataloged FLAC files from renders directory
         known_audio_names = set()
         for h in items:
@@ -2593,6 +2918,37 @@ class Handler(BaseHTTPRequestHandler):
                 clean_rf = re.sub(r"^render_[a-f0-9]+_", "", rf_lower)
                 clean_rf = re.sub(r"^input_[a-f0-9]+_", "", clean_rf)
                 song_base = re.sub(r"\.flac$", "", clean_rf)
+                stem_base = _clean_song_base(clean_rf)
+                stem_info = _detect_stem_role_label(clean_rf)
+
+                # If this file is a stem of an existing song item, attach it rather than creating a duplicate card
+                if stem_info:
+                    parent_item = None
+                    for existing_h in items:
+                        for existing_m in (existing_h.get("media") or []):
+                            if existing_m.get("kind") == "audio":
+                                if _clean_song_base(existing_m.get("name", "")) == stem_base:
+                                    parent_item = existing_h
+                                    break
+                        if parent_item:
+                            break
+                    if parent_item:
+                        existing_names = {m.get("name", "").lower() for m in (parent_item.get("media") or [])}
+                        if rf_lower not in existing_names:
+                            role, label = stem_info
+                            parent_item.setdefault("media", []).append({
+                                "node": "audio",
+                                "kind": "audio",
+                                "role": role,
+                                "label": label,
+                                "name": rf,
+                                "url": f"/api/view?filename={urllib.parse.quote(rf)}&source=local",
+                                "temp": False,
+                            })
+                            changed = True
+                        known_audio_names.add(rf_lower)
+                        continue
+
                 if rf_lower not in known_audio_names and clean_rf not in known_audio_names:
                     try:
                         rec = srt_translate.extract_plenio_record_from_flac(flac_full)
@@ -2604,6 +2960,8 @@ class Handler(BaseHTTPRequestHandler):
                         title = os.path.splitext(clean_rf)[0]
                         title = re.sub(r"^\d{4}-\d{2}-\d{2}\s*", "", title)
                     lyrics = (docs.get("lyrics") or {}).get("text") or ""
+                    style_text = (docs.get("style") or {}).get("text") or ""
+                    art_text = (docs.get("artwork_prompt") or {}).get("text") or ""
                     flac_mtime = int(os.path.getmtime(flac_full))
                     flac_media = [{
                         "node": "audio",
@@ -2629,7 +2987,12 @@ class Handler(BaseHTTPRequestHandler):
                         "ts": flac_mtime,
                         "title": title or "Song",
                         "brief": None,
-                        "sheet": {"title": title, "lyrics": lyrics},
+                        "sheet": {
+                            "title": title,
+                            "style": style_text,
+                            "lyrics": lyrics,
+                            "artwork_prompt": art_text,
+                        },
                         "options": {},
                         "media": flac_media,
                         "texts": [],
@@ -2646,17 +3009,198 @@ class Handler(BaseHTTPRequestHandler):
                 pass
         return items
 
+    @staticmethod
+    def _get_wt_wsl_profile() -> str | None:
+        """Finds the WSL Ubuntu profile name configured in Windows Terminal settings."""
+        try:
+            local_app_data = os.environ.get("LOCALAPPDATA", "")
+            settings_path = os.path.join(
+                local_app_data, "Packages", "Microsoft.WindowsTerminal_8wekyb3d8bbwe", "LocalState", "settings.json"
+            )
+            if os.path.isfile(settings_path):
+                with open(settings_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                profiles = data.get("profiles", {}).get("list", [])
+                for p in profiles:
+                    if p.get("source") == "Microsoft.WSL" and "26.04" in p.get("name", ""):
+                        return p.get("name")
+                for p in profiles:
+                    if p.get("source") == "Microsoft.WSL":
+                        return p.get("name")
+                for p in profiles:
+                    if "ubuntu" in p.get("name", "").lower():
+                        return p.get("name")
+        except Exception:
+            pass
+        return None
+
     def _start_comfy(self) -> dict:
-        cmd = config().get("comfy_start_command")
+        cmd = (config().get("comfy_start_command") or "").strip()
         if not cmd:
             raise ValueError(_tr(
                 "No start command configured for ComfyUI in settings.",
                 "In den Einstellungen ist kein Startbefehl für ComfyUI hinterlegt.",
             ))
-        cwd = config().get("comfy_dir") or None
-        flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
-        subprocess.Popen(cmd, shell=True, cwd=cwd, creationflags=flags)
-        return {"started": True}
+        cwd = (config().get("comfy_dir") or "").strip() or None
+        if cwd and not os.path.isdir(cwd):
+            cwd = None
+
+        wt_used = False
+        is_wsl = cmd.startswith("wsl") or "~/" in cmd or ".sh" in cmd
+        wsl_exec = ""
+        if is_wsl:
+            clean_subcmd = cmd
+            if clean_subcmd.startswith("wsl"):
+                clean_subcmd = clean_subcmd[3:].strip()
+            if clean_subcmd.startswith("bash"):
+                clean_subcmd = clean_subcmd[4:].strip()
+            if not clean_subcmd:
+                raise ValueError(_tr(
+                    "Incomplete WSL start command. Please provide the script path.",
+                    "Unvollständiger WSL-Start-Befehl. Bitte Skriptpfad angeben.",
+                ))
+            wsl_exec = f'wsl --cd ~ bash -l -c "{clean_subcmd}"'
+
+        if sys.platform == "win32":
+            wt_exe = shutil.which("wt") or shutil.which("wt.exe")
+            if not wt_exe:
+                local_app_data = os.environ.get("LOCALAPPDATA", "")
+                cand = os.path.join(local_app_data, "Microsoft", "WindowsApps", "wt.exe")
+                if os.path.isfile(cand):
+                    wt_exe = cand
+
+            if wt_exe:
+                wt_used = True
+                profile = self._get_wt_wsl_profile() if is_wsl else None
+                profile_arg = f'-p "{profile}" ' if profile else ""
+                if is_wsl:
+                    exec_str = f'"{wt_exe}" -w 0 new-tab {profile_arg}--title "ComfyUI (WSL)" {wsl_exec}'
+                elif cmd.lower().endswith(".bat") or cmd.lower().endswith(".cmd"):
+                    exec_str = f'"{wt_exe}" -w 0 new-tab --title "ComfyUI" cmd.exe /k "{cmd}"'
+                else:
+                    exec_str = f'"{wt_exe}" -w 0 new-tab --title "ComfyUI" {cmd}'
+                subprocess.Popen(exec_str, shell=True, cwd=cwd)
+            else:
+                flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+                if is_wsl:
+                    subprocess.Popen(wsl_exec, shell=True, cwd=cwd, creationflags=flags)
+                elif os.path.isfile(cmd):
+                    subprocess.Popen(f'"{cmd}"', shell=True, cwd=cwd, creationflags=flags)
+                else:
+                    subprocess.Popen(cmd, shell=True, cwd=cwd, creationflags=flags)
+        else:
+            subprocess.Popen(["bash", "-c", cmd], cwd=cwd)
+
+        return {"started": True, "status": "launched", "terminal": "wt" if wt_used else "classic"}
+
+    def _browse_start_cmd(self, body: dict | None = None) -> dict:
+        initial_dir = ""
+        if isinstance(body, dict):
+            cand = str(body.get("initial_dir") or "").strip()
+            if cand:
+                if os.path.isfile(cand):
+                    initial_dir = os.path.dirname(cand)
+                elif os.path.isdir(cand):
+                    initial_dir = cand
+        if not initial_dir:
+            cdir = (config().get("comfy_dir") or "").strip()
+            if cdir and os.path.isdir(cdir):
+                initial_dir = cdir
+
+        # 1. Try pywebview native file dialog when running as desktop app
+        try:
+            import webview  # type: ignore
+            if getattr(webview, "windows", None):
+                res = webview.windows[0].create_file_dialog(
+                    webview.OPEN_DIALOG,
+                    directory=initial_dir or "",
+                    allow_multiple=False,
+                    file_types=(
+                        "ComfyUI Start Scripts (*.bat;*.cmd;*.exe;*.sh)",
+                        "All files (*.*)",
+                    ),
+                )
+                if res and len(res) > 0:
+                    return {"path": str(res[0])}
+                return {"path": ""}
+        except Exception:
+            pass
+
+        # 2. Fallback on Windows (browser mode): PowerShell WinForms OpenFileDialog
+        if sys.platform == "win32":
+            init_escaped = initial_dir.replace("'", "''")
+            ps_script = (
+                "Add-Type -AssemblyName System.Windows.Forms; "
+                "$d = New-Object System.Windows.Forms.OpenFileDialog; "
+                "$d.Title = 'ComfyUI Start-Skript auswählen'; "
+                "$d.Filter = 'Start-Skripte (*.bat;*.cmd;*.exe;*.sh)|*.bat;*.cmd;*.exe;*.sh|Alle Dateien (*.*)|*.*'; "
+                + (f"if (Test-Path '{init_escaped}') {{ $d.InitialDirectory = '{init_escaped}'; }} " if init_escaped else "")
+                + "if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $d.FileName }"
+            )
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            proc = subprocess.run(
+                ["powershell", "-NoProfile", "-STA", "-Command", ps_script],
+                capture_output=True,
+                text=True,
+                creationflags=flags,
+            )
+            selected = (proc.stdout or "").strip()
+            return {"path": selected}
+
+        return {"path": ""}
+
+    def _find_comfy_python(self) -> str | None:
+        cdir = (config().get("comfy_dir") or "").strip()
+        if not cdir:
+            return None
+        win_cdir = _to_local_windows_path(cdir)
+        roots = [win_cdir, os.path.dirname(win_cdir)]
+        rels = [
+            os.path.join("python_embeded", "python.exe"),
+            os.path.join("venv", "Scripts", "python.exe"),
+            os.path.join(".venv", "Scripts", "python.exe"),
+            os.path.join("python_embeded", "bin", "python3"),
+            os.path.join("venv", "bin", "python3"),
+        ]
+        for root in roots:
+            if not root:
+                continue
+            for rel in rels:
+                cand = os.path.join(root, rel)
+                if os.path.isfile(cand):
+                    return cand
+        return None
+
+    def _fix_comfy_transformers(self) -> dict:
+        py_exe = self._find_comfy_python()
+        if not py_exe:
+            return {
+                "ok": False,
+                "error": _tr(
+                    "ComfyUI Python not found. Please set the ComfyUI folder in Settings first.",
+                    "ComfyUI-Python wurde nicht gefunden. Bitte zuerst den ComfyUI-Ordner in den Einstellungen angeben.",
+                ),
+            }
+        try:
+            proc = subprocess.run(
+                [py_exe, "-m", "pip", "install", "-U", "transformers"],
+                capture_output=True,
+                text=True,
+                timeout=300,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except Exception as ex:  # noqa: BLE001
+            return {"ok": False, "error": str(ex)}
+        if proc.returncode != 0:
+            err_tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
+            return {"ok": False, "error": "\n".join(err_tail) or f"pip exited with {proc.returncode}"}
+        return {
+            "ok": True,
+            "message": _tr(
+                "transformers updated! Please restart ComfyUI once if it is currently running.",
+                "transformers wurde aktualisiert! Bitte ComfyUI einmal kurz neu starten, falls es gerade läuft.",
+            ),
+        }
 
     def _get_changelog(self) -> dict:
         cand_dirs = [
@@ -2806,8 +3350,10 @@ class Handler(BaseHTTPRequestHandler):
                 for cand in (
                     os.path.join(DATA_DIR, fname),
                     os.path.join(APP_DIR, "data", "renders", fname),
+                    os.path.join(APP_DIR, "media", fname),
                     os.path.join(APP_DIR, "dist", "data", "renders", fname),
                     os.path.join(os.path.dirname(APP_DIR), "data", "renders", fname),
+                    os.path.join(os.path.dirname(APP_DIR), "media", fname),
                     os.path.join(os.path.dirname(APP_DIR), "dist", "data", "renders", fname),
                     os.path.expandvars(rf"%LOCALAPPDATA%\Programs\tA-MusicMaker\data\renders\{fname}"),
                 ):
@@ -2969,6 +3515,12 @@ def patch_pywebview_download_filter() -> None:
             result = dialog.ShowDialog(self.form)
             if result == edgechromium.WinForms.DialogResult.OK:
                 args.ResultFilePath = dialog.FileName
+                try:
+                    args.Handled = True
+                except Exception:
+                    pass
+                STATE["last_saved_path"] = dialog.FileName
+                STATE["last_saved_ts"] = time.time()
             else:
                 args.Cancel = True
 

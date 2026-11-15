@@ -1,6 +1,6 @@
 ; Inno Setup Script for tA MusicMaker
 #define MyAppName "tA MusicMaker"
-#define MyAppVersion "1.08"
+#define MyAppVersion "1.32"
 #define MyAppPublisher "tA MusicMaker"
 #define MyAppExeName "tA-MusicMaker.exe"
 

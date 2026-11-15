@@ -213,34 +213,29 @@ def enforce_resolve_compatibility(cues: list[dict], min_gap: float = 0.08, min_d
     return clean
 
 
-def extend_cues_until_next_sentence(cues: list[dict], pause_before_next: float = 1.0, max_duration: float = 6.0) -> list[dict]:
-    """Extend each cue's display time until `pause_before_next` seconds before the next cue starts,
-    providing a calm, professional subtitle pacing without any overlapping timecodes."""
+def extend_cues_until_next_sentence(cues: list[dict], pause_before_next: float = 0.45, max_duration: float = 6.0) -> list[dict]:
+    """Keep each cue visible for its full sung duration plus a gentle trailing hold (`~0.45s`),
+    bridging short gaps (`<= 1.0s`) smoothly without dragging subtitles into long instrumental pauses
+    or truncating lines that are genuinely sung over > 6 seconds."""
     if not cues:
         return cues
     for i in range(len(cues)):
         t0 = cues[i]["start"]
-        cur_end = cues[i]["end"]
-        min_d = 1.4 if len(cues[i]["text"].split()) <= 2 else 2.2
-        cues[i]["end"] = max(t0 + min_d, cur_end)
+        sung_end = cues[i]["end"]
+        min_d = 1.2 if len(cues[i]["text"].split()) <= 3 else 1.8
+        natural_end = max(t0 + min_d, sung_end + 0.40)
 
         if i + 1 < len(cues):
             next_start = cues[i + 1]["start"]
-            target_end = next_start - pause_before_next
-            # If gap between lines is tight (<= 1.2s), preserve at least a 0.15s visual transition
-            if next_start - cues[i]["end"] <= 1.2:
-                target_end = max(cues[i]["end"], next_start - 0.15)
-            # Extend if target is later than current end
-            if target_end > cues[i]["end"]:
-                cues[i]["end"] = target_end
-            # Strict safety: never overlap with next cue!
+            gap = next_start - sung_end
+            if gap <= 1.0:
+                target_end = max(sung_end, next_start - 0.12)
+            else:
+                target_end = min(natural_end, next_start - pause_before_next)
             max_allowed = max(t0 + 0.2, next_start - 0.08)
-            if max_allowed > next_start - 0.08:
-                max_allowed = max(t0 + 0.1, next_start - 0.08)
-            cues[i]["end"] = min(t0 + max_duration, cues[i]["end"], max_allowed)
+            cues[i]["end"] = min(max(sung_end, target_end), max_allowed)
         else:
-            # Last cue of song
-            cues[i]["end"] = min(t0 + max_duration, cues[i]["end"] + 1.5)
+            cues[i]["end"] = max(sung_end + 0.5, min(t0 + max_duration, natural_end))
     return enforce_resolve_compatibility(cues, min_gap=0.08)
 
 
@@ -598,12 +593,251 @@ def get_whisper_transcription(flac_path: str | Path, prompt: str = "", language:
     return segments, words, audio_dur
 
 
+def _find_monotone_whisper_anchors(all_lines: list[str], words: list[dict]) -> dict[int, dict]:
+    """Find a globally consistent, strictly monotone chain of high-confidence lyric line anchors.
+    Avoids greedy pointer lock-up when intermediate lines are missed or repeated choruses occur."""
+    total_lines = len(all_lines)
+    n_words = len(words)
+    if not total_lines or not n_words:
+        return {}
+
+    candidates_per_line: list[list[tuple[int, int, float]]] = []
+    half_band = max(120, int(n_words * 0.45))
+
+    for l_idx, line in enumerate(all_lines):
+        clean_line_words = [re.sub(r"[^\w]", "", w.lower()) for w in line.split() if re.sub(r"[^\w]", "", w.lower())]
+        if not clean_line_words:
+            candidates_per_line.append([])
+            continue
+
+        target_k = len(clean_line_words)
+        min_score = 0.55 if target_k >= 3 else 0.75
+        exp_i = int((l_idx / max(1, total_lines - 1)) * max(0, n_words - 1))
+        lo = 0 if n_words <= 800 else max(0, exp_i - half_band)
+        hi = n_words if n_words <= 800 else min(n_words, exp_i + half_band)
+
+        spans: list[tuple[int, int, float]] = []
+        for i in range(lo, hi):
+            best_k_span = None
+            best_k_score = 0.0
+            for k in range(max(1, target_k - 2), min(target_k + 4, n_words - i + 1)):
+                cand = [words[i + m]["clean"] for m in range(k)]
+                matched_cnt = 0
+                for cw in cand:
+                    if any(cw == tw or (len(cw) >= 4 and len(tw) >= 4 and (cw in tw or tw in cw)) for tw in clean_line_words):
+                        matched_cnt += 1
+                score = matched_cnt / max(target_k, len(cand))
+                if score > best_k_score:
+                    best_k_score = score
+                    best_k_span = (i, i + k)
+            if best_k_span and best_k_score >= min_score:
+                pos_penalty = 0.15 * abs(i - exp_i) / max(1, n_words)
+                spans.append((best_k_span[0], best_k_span[1], best_k_score - pos_penalty))
+
+        # Keep top non-overlapping candidates per line for fast DP
+        spans.sort(key=lambda x: x[2], reverse=True)
+        kept: list[tuple[int, int, float]] = []
+        for sp in spans:
+            if all(sp[1] <= k_sp[0] or sp[0] >= k_sp[1] for k_sp in kept):
+                kept.append(sp)
+                if len(kept) >= 4:
+                    break
+        kept.sort(key=lambda x: x[0])
+        candidates_per_line.append(kept)
+
+    # DP over (line_idx, cand_idx) for maximum total weighted score with strictly increasing word spans
+    dp_val: list[list[float]] = []
+    dp_prev: list[list[tuple[int, int] | None]] = []
+    best_overall = (0.0, None)  # (score, (l_idx, c_idx))
+
+    for l_idx, cands in enumerate(candidates_per_line):
+        row_val: list[float] = []
+        row_prev: list[tuple[int, int] | None] = []
+        for c_idx, (s_i, _e_i, sc) in enumerate(cands):
+            best_p_val = 0.0
+            best_p_ref: tuple[int, int] | None = None
+            for p_l in range(l_idx):
+                for p_c, (_ps, pe, _psc) in enumerate(candidates_per_line[p_l]):
+                    if pe <= s_i and dp_val[p_l][p_c] > best_p_val:
+                        best_p_val = dp_val[p_l][p_c]
+                        best_p_ref = (p_l, p_c)
+            total_sc = best_p_val + sc
+            row_val.append(total_sc)
+            row_prev.append(best_p_ref)
+            if total_sc > best_overall[0]:
+                best_overall = (total_sc, (l_idx, c_idx))
+        dp_val.append(row_val)
+        dp_prev.append(row_prev)
+
+    anchors: dict[int, dict] = {}
+    cur = best_overall[1]
+    while cur is not None:
+        l_idx, c_idx = cur
+        s_i, e_i, sc = candidates_per_line[l_idx][c_idx]
+        anchors[l_idx] = {
+            "start": words[s_i]["start"],
+            "end": words[e_i - 1]["end"],
+            "score": sc,
+        }
+        cur = dp_prev[l_idx][c_idx]
+    return anchors
+
+
+def _words_from_plenio_sung(sung_info: dict) -> tuple[list[dict], float]:
+    """Convert Plenio's embedded Qwen3-ASR `sung.lines` (+ `units`) into word-level timestamps."""
+    words: list[dict] = []
+    max_end = 0.0
+    for item in sung_info.get("lines") or []:
+        text = str(item.get("text") or "")
+        l_start = float(item.get("start") or 0.0)
+        l_end = float(item.get("end") or (l_start + 1.0))
+        max_end = max(max_end, l_end)
+        units = item.get("units") or []
+        if units and text:
+            prev_char = 0
+            for u_idx, u in enumerate(units):
+                if not isinstance(u, (list, tuple)) or len(u) < 2:
+                    continue
+                u_start = float(u[0])
+                char_end = int(u[1])
+                if u_idx + 1 < len(units) and isinstance(units[u_idx + 1], (list, tuple)):
+                    u_end = max(u_start + 0.05, float(units[u_idx + 1][0]))
+                else:
+                    u_end = max(u_start + 0.05, l_end)
+                frag = text[prev_char:char_end]
+                prev_char = char_end
+                tokens = [re.sub(r"[^\w]", "", tok.lower()) for tok in frag.split() if re.sub(r"[^\w]", "", tok.lower())]
+                if not tokens:
+                    continue
+                step = (u_end - u_start) / len(tokens)
+                for t_i, cw in enumerate(tokens):
+                    words.append({"clean": cw, "start": u_start + t_i * step, "end": u_start + (t_i + 1) * step})
+        elif text:
+            tokens = [re.sub(r"[^\w]", "", tok.lower()) for tok in text.split() if re.sub(r"[^\w]", "", tok.lower())]
+            if tokens:
+                step = max(0.05, (l_end - l_start) / len(tokens))
+                for t_i, cw in enumerate(tokens):
+                    words.append({"clean": cw, "start": l_start + t_i * step, "end": l_start + (t_i + 1) * step})
+    return words, max_end
+
+
+def _align_lines_to_words(all_lines: list[str], words: list[dict], audio_dur: float, resolve_mode: bool = False) -> str | None:
+    """Align written lyric lines to word-level timestamps using global monotone DP anchors."""
+    if not all_lines or not words:
+        return None
+    if audio_dur <= 0.0:
+        audio_dur = words[-1]["end"] + 5.0
+
+    total_lines = len(all_lines)
+    anchors = _find_monotone_whisper_anchors(all_lines, words)
+
+    cues = []
+    for l_idx in range(total_lines):
+        if l_idx in anchors:
+            cues.append({
+                "start": anchors[l_idx]["start"],
+                "end": anchors[l_idx]["end"] + (0.20 if resolve_mode else 0.0),
+                "text": all_lines[l_idx],
+            })
+        else:
+            prev_idx = next((p for p in range(l_idx - 1, -1, -1) if p in anchors), None)
+            next_idx = next((n for n in range(l_idx + 1, total_lines) if n in anchors), None)
+
+            if prev_idx is not None and next_idx is not None:
+                t_prev = anchors[prev_idx]["end"]
+                t_next = anchors[next_idx]["start"]
+                span_lines = next_idx - prev_idx
+                step = max(0.5, (t_next - t_prev) / span_lines)
+                pos = l_idx - prev_idx
+                t0 = t_prev + (pos - 1) * step + 0.15
+                t1 = min(t_next - 0.1, t0 + max(1.2, step * 0.85))
+            elif prev_idx is not None:
+                t_prev = anchors[prev_idx]["end"]
+                rem_lines = max(1, total_lines - prev_idx - 1)
+                rem_time = max(1.0, (audio_dur - 0.4) - t_prev)
+                step = min(3.2, rem_time / rem_lines)
+                pos = l_idx - prev_idx
+                t0 = min(audio_dur - 0.8, t_prev + (pos - 1) * step + 0.15)
+                t1 = min(audio_dur - 0.2, t0 + max(0.8, step * 0.85))
+            elif next_idx is not None:
+                t_next = anchors[next_idx]["start"]
+                pos = next_idx - l_idx
+                step = min(3.0, max(0.8, t_next / max(1, next_idx)))
+                t1 = max(0.8, t_next - (pos - 1) * step - 0.15)
+                t0 = max(0.0, t1 - max(0.8, step * 0.85))
+            else:
+                step = min(3.5, max(1.0, (audio_dur - 0.5) / max(1, total_lines)))
+                t0 = l_idx * step
+                t1 = min(audio_dur - 0.2, t0 + max(0.8, step * 0.85))
+
+            cues.append({"start": max(0.0, t0), "end": max(t0 + 0.5, t1), "text": all_lines[l_idx]})
+
+    if resolve_mode:
+        cues = enforce_resolve_compatibility(cues, min_gap=0.08)
+    else:
+        cues = extend_cues_until_next_sentence(cues)
+
+    blocks = []
+    for idx, c in enumerate(cues, start=1):
+        txt = wrap_subtitle_line(c["text"])
+        if txt:
+            blocks.append(f"{idx}\n{srt_timestamp(c['start'])} --> {srt_timestamp(c['end'])}\n{txt}")
+    return "\n\n".join(blocks) + "\n" if blocks else None
+
+
+def _build_sung_corrected_srt(sung_segments: list[dict], all_lines: list[str], resolve_mode: bool = False) -> str | None:
+    """Use actual sung ASR segments as the unshakeable timing source-of-truth,
+    replacing misheard ASR text with the matching written lyric line where confident,
+    and naturally omitting unsung lines (e.g. skipped outros/verses)."""
+    if not sung_segments:
+        return None
+
+    clean_written: list[set[str]] = []
+    for ln in all_lines:
+        clean_written.append({re.sub(r"[^\w]", "", w.lower()) for w in ln.split() if re.sub(r"[^\w]", "", w.lower())})
+
+    n_seg = len(sung_segments)
+    n_wr = len(all_lines)
+    corrected: list[dict] = []
+
+    for s_idx, seg in enumerate(sung_segments):
+        txt = str(seg.get("text") or "").strip()
+        if not txt:
+            continue
+        start = float(seg.get("start") or 0.0)
+        end = float(seg.get("end") or (start + 1.5))
+
+        seg_words = {re.sub(r"[^\w]", "", w.lower()) for w in txt.split() if re.sub(r"[^\w]", "", w.lower())}
+        best_line = None
+        best_score = 0.0
+
+        if seg_words and n_wr:
+            exp_l = (s_idx / max(1, n_seg - 1)) * max(0, n_wr - 1)
+            for l_idx, wr_words in enumerate(clean_written):
+                if not wr_words:
+                    continue
+                matched = sum(
+                    1 for sw in seg_words
+                    if any(sw == ww or (len(sw) >= 4 and len(ww) >= 4 and (sw in ww or ww in sw)) for ww in wr_words)
+                )
+                if matched < (2 if len(wr_words) >= 3 else 1):
+                    continue
+                jaccard = matched / max(len(seg_words), len(wr_words))
+                pos_pen = 0.12 * abs(l_idx - exp_l) / max(1, n_wr)
+                sc = jaccard - pos_pen
+                min_req = 0.45 if len(wr_words) >= 3 else 0.65
+                if jaccard >= min_req and sc > best_score:
+                    best_score = sc
+                    best_line = all_lines[l_idx]
+
+        corrected.append({"start": start, "end": end, "text": best_line or txt})
+
+    return _format_timing_lines_to_srt(corrected, resolve_mode=resolve_mode)
+
+
 def align_lyrics_with_whisper(flac_path: str | Path, rec: dict | None = None, fallback_lyrics: str | None = None, resolve_mode: bool = False) -> str | None:
     """Align lyrics with actual audio speech using faster-whisper.
-    Uses monotonic high-confidence anchor matching and smooth interpolation.
-    - If `resolve_mode=True`: Strictly cut-exact, ending when vocals stop (+0.2s decay) with guaranteed 80ms non-overlapping safety gaps for DaVinci Resolve.
-    - If `resolve_mode=False`: Smooth reading pacing with zero-overlap safety.
-    """
+    Prefers exact sung segment timings with lyric-text correction so unsung lines never drift."""
     if not rec:
         rec = extract_plenio_record_from_flac(flac_path)
     if not rec and not fallback_lyrics:
@@ -617,9 +851,7 @@ def align_lyrics_with_whisper(flac_path: str | Path, rec: dict | None = None, fa
     all_lines: list[str] = []
     for raw in lyrics_text.splitlines():
         line = raw.strip()
-        if not line:
-            continue
-        if line.startswith("[") and line.endswith("]"):
+        if not line or (line.startswith("[") and line.endswith("]")):
             continue
         all_lines.append(line)
 
@@ -629,107 +861,17 @@ def align_lyrics_with_whisper(flac_path: str | Path, rec: dict | None = None, fa
     lang = detect_lyrics_language(lyrics_text)
     prompt = " ".join(" ".join(all_lines).split()[:200])
     segments, words, audio_dur = get_whisper_transcription(flac_path, prompt=prompt, language=lang)
+    if segments:
+        res = _build_sung_corrected_srt(segments, all_lines, resolve_mode=resolve_mode)
+        if res:
+            return res
     if not words:
         return None
 
     files = (rec or {}).get("files") or []
     if files and files[0].get("seconds"):
         audio_dur = max(audio_dur, float(files[0]["seconds"]))
-    if audio_dur <= 0.0 and words:
-        audio_dur = words[-1]["end"] + 5.0
-
-    # Step 1: Find high-confidence anchor matches monotonically
-    anchors: dict[int, dict] = {}
-    cur_idx = 0
-    total_lines = len(all_lines)
-
-    for l_idx, line in enumerate(all_lines):
-        clean_line_words = [re.sub(r"[^\w]", "", w.lower()) for w in line.split() if re.sub(r"[^\w]", "", w.lower())]
-        if not clean_line_words:
-            continue
-        best_span = None
-        best_score = 0.0
-        target_k = len(clean_line_words)
-        search_window = min(len(words), cur_idx + 40)
-        for i in range(cur_idx, search_window):
-            for k in range(max(1, target_k - 2), min(target_k + 4, len(words) - i + 1)):
-                cand = [words[i + m]["clean"] for m in range(k)]
-                matched_cnt = 0
-                for cw in cand:
-                    if any(cw == tw or (len(cw) >= 4 and len(tw) >= 4 and (cw in tw or tw in cw)) for tw in clean_line_words):
-                        matched_cnt += 1
-                score = matched_cnt / max(len(clean_line_words), len(cand))
-                if score > best_score:
-                    best_score = score
-                    best_span = (i, i + k)
-        min_score = 0.55 if len(clean_line_words) >= 3 else 0.75
-        if best_span and best_score >= min_score:
-            w_start = words[best_span[0]]["start"]
-            w_end = words[best_span[1] - 1]["end"]
-            cur_idx = best_span[1]
-            anchors[l_idx] = {"start": w_start, "end": w_end, "score": best_score}
-
-    # Step 2: Build raw cues with both anchors and smooth interpolation
-    cues = []
-    for l_idx in range(total_lines):
-        if l_idx in anchors:
-            cues.append({
-                "start": anchors[l_idx]["start"],
-                "end": anchors[l_idx]["end"] + (0.20 if resolve_mode else 0.0),
-                "text": all_lines[l_idx]
-            })
-        else:
-            prev_idx = None
-            for p in range(l_idx - 1, -1, -1):
-                if p in anchors:
-                    prev_idx = p
-                    break
-            next_idx = None
-            for n in range(l_idx + 1, total_lines):
-                if n in anchors:
-                    next_idx = n
-                    break
-
-            if prev_idx is not None and next_idx is not None:
-                t_prev = anchors[prev_idx]["end"]
-                t_next = anchors[next_idx]["start"]
-                span_lines = next_idx - prev_idx
-                step = max(0.5, (t_next - t_prev) / span_lines)
-                pos = l_idx - prev_idx
-                t0 = t_prev + (pos - 1) * step + 0.15
-                t1 = min(t_next - 0.1, t0 + max(1.2, step * 0.85))
-            elif prev_idx is not None:
-                t_prev = anchors[prev_idx]["end"]
-                pos = l_idx - prev_idx
-                t0 = t_prev + (pos - 1) * 3.0 + 0.5
-                t1 = min(audio_dur - 0.5, t0 + 2.5)
-            elif next_idx is not None:
-                t_next = anchors[next_idx]["start"]
-                pos = next_idx - l_idx
-                t1 = max(0.5, t_next - (pos - 1) * 3.0 - 0.5)
-                t0 = max(0.0, t1 - 2.5)
-            else:
-                t0 = l_idx * 3.5
-                t1 = t0 + 2.8
-
-            cues.append({
-                "start": max(0.0, t0),
-                "end": max(t0 + 0.8, t1),
-                "text": all_lines[l_idx]
-            })
-
-    # Step 3: Pacing vs Cut-Exact Mode
-    if resolve_mode:
-        cues = enforce_resolve_compatibility(cues, min_gap=0.08)
-    else:
-        cues = extend_cues_until_next_sentence(cues)
-
-    blocks = []
-    for idx, c in enumerate(cues, start=1):
-        txt = wrap_subtitle_line(c["text"])
-        if txt:
-            blocks.append(f"{idx}\n{srt_timestamp(c['start'])} --> {srt_timestamp(c['end'])}\n{txt}")
-    return "\n\n".join(blocks) + "\n" if blocks else None
+    return _align_lines_to_words(all_lines, words, audio_dur, resolve_mode=resolve_mode)
 
 
 def _format_timing_lines_to_srt(lines: list[dict], resolve_mode: bool = False) -> str | None:
@@ -819,12 +961,131 @@ def extract_sung_srt_from_flac(flac_path: str | Path) -> str | None:
             return _format_timing_lines_to_srt(sung_info.get("lines") or [])
     return transcribe_sung_with_whisper(flac_path)
 
+def _win_to_wsl_path(path: Path) -> str:
+    p = str(path.resolve())
+    if len(p) >= 2 and p[1] == ":":
+        drive = p[0].lower()
+        rest = p[2:].replace("\\", "/")
+        return f"/mnt/{drive}{rest}"
+    return p.replace("\\", "/")
+
+
+def _read_embedded_lyrics_tag(audio_path: Path) -> str:
+    """Read LYRICS/lyrics metadata tag via ffprobe if available."""
+    import subprocess
+    try:
+        kwargs = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+        out = subprocess.check_output(
+            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(audio_path)],
+            timeout=10,
+            **kwargs,
+        )
+        tags = (json.loads(out).get("format") or {}).get("tags") or {}
+        return str(tags.get("LYRICS") or tags.get("lyrics") or "").strip()
+    except Exception:
+        return ""
+
+
+def align_vocals_wsl_forced(
+    audio_path: str | Path,
+    lyrics_text: str | None = None,
+    lang: str = "auto",
+    resolve_mode: bool = False,
+) -> str | None:
+    """Isolate vocal stem (Demucs on GPU) and run Qwen3-ForcedAligner with known lyrics via WSL."""
+    import hashlib
+    import shutil
+    import subprocess
+
+    ap = Path(audio_path).resolve()
+    if not ap.is_file():
+        return None
+    if os.name != "nt" or not shutil.which("wsl"):
+        return None
+
+    worker_win = Path(__file__).resolve().parent / "wsl_vocal_align.py"
+    if not worker_win.is_file():
+        return None
+
+    lyrics_clean = (lyrics_text or "").strip()
+    if not lyrics_clean:
+        rec = extract_plenio_record_from_flac(ap) or {}
+        lyrics_clean = ((rec.get("documents") or {}).get("lyrics") or {}).get("text") or ""
+    if not lyrics_clean:
+        lyrics_clean = _read_embedded_lyrics_tag(ap)
+    if not lyrics_clean:
+        return None
+
+    st = ap.stat()
+    audio_key = hashlib.sha1(f"{ap}|{st.st_size}|{st.st_mtime_ns}".encode("utf-8")).hexdigest()[:16]
+    lyrics_key = hashlib.sha1(lyrics_clean.encode("utf-8")).hexdigest()[:12]
+
+    cache_root = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "tA-MusicMaker" / "align_cache"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    out_json = cache_root / f"{audio_key}_{lyrics_key}.v2.aligned.json"
+
+    if out_json.is_file():
+        try:
+            data = json.loads(out_json.read_text(encoding="utf-8"))
+            if data.get("lines"):
+                res = _format_timing_lines_to_srt(data["lines"], resolve_mode=resolve_mode)
+                if res:
+                    return res
+        except Exception:
+            pass
+
+    existing_vocals = find_vocal_audio_path(ap)
+    vocals_cache = Path(existing_vocals) if existing_vocals else (cache_root / f"{audio_key}_vocals.wav")
+    lyrics_file = cache_root / f"{audio_key}_{lyrics_key}.lyrics.txt"
+    lyrics_file.write_text(lyrics_clean, encoding="utf-8")
+
+    wsl_python = "/home/thomas/CEI1-DEV/python_embeded/bin/python3"
+    cmd = [
+        "wsl",
+        wsl_python,
+        _win_to_wsl_path(worker_win),
+        "--audio",
+        _win_to_wsl_path(ap),
+        "--lyrics",
+        _win_to_wsl_path(lyrics_file),
+        "--vocals-cache",
+        _win_to_wsl_path(vocals_cache),
+        "--out",
+        _win_to_wsl_path(out_json),
+        "--lang",
+        lang or "auto",
+    ]
+    try:
+        kwargs = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=420, **kwargs)
+        if proc.returncode != 0:
+            print(f"[VocalAlign-WSL] Beendet mit Code {proc.returncode}: {(proc.stderr or '')[-400:]}")
+            return None
+        if out_json.is_file():
+            data = json.loads(out_json.read_text(encoding="utf-8"))
+            if data.get("lines"):
+                print(f"[VocalAlign-WSL] Erfolgreich: {len(data['lines'])} Zeilen ({data.get('language', '?')})")
+                return _format_timing_lines_to_srt(data["lines"], resolve_mode=resolve_mode)
+    except Exception as ex:
+        print(f"[VocalAlign-WSL] Hinweis: {ex}")
+    return None
+
+
 def extract_srt_from_flac(flac_path: str | Path, fallback_lyrics: str | None = None, prefer_sung: bool = False, resolve_mode: bool = False) -> str | None:
     """Build the original `(lines).srt` or `(sung).srt` content from a Plenio FLAC file's embedded timing record,
     or via local Whisper ASR alignment, or synthesize from score when ASR did not run.
     - If `resolve_mode=True`: Generates 100% DaVinci Resolve cut-exact subtitle timings with zero overlap.
     """
     rec = extract_plenio_record_from_flac(flac_path)
+
+    # 0. Highest-reliability path: Isolated vocal stem (Demucs GPU) + Qwen3-ForcedAligner with known lyrics
+    if not prefer_sung:
+        docs = (rec or {}).get("documents") or {}
+        known_lyrics = (docs.get("lyrics") or {}).get("text") or (fallback_lyrics or "").strip()
+        wsl_srt = align_vocals_wsl_forced(flac_path, lyrics_text=known_lyrics, resolve_mode=resolve_mode)
+        if wsl_srt:
+            return wsl_srt
+
     if not rec and not fallback_lyrics:
         return None
     rec = rec or {}
@@ -834,14 +1095,26 @@ def extract_srt_from_flac(flac_path: str | Path, fallback_lyrics: str | None = N
     if timings and isinstance(timings, list):
         first_t = timings[0]
         sung_info = first_t.get("sung")
-        lines = None
         if prefer_sung and isinstance(sung_info, dict) and sung_info.get("lines"):
-            lines = sung_info.get("lines") or []
-        elif first_t.get("lines"):
-            lines = first_t.get("lines") or []
-        elif isinstance(sung_info, dict) and sung_info.get("lines"):
-            lines = sung_info.get("lines") or []
+            res = _format_timing_lines_to_srt(sung_info["lines"], resolve_mode=resolve_mode)
+            if res:
+                return res
 
+        # Stage 1: Use Plenio's Qwen3-ASR sung segments as exact timing source-of-truth,
+        # correcting misheard ASR words from the written lyrics (and omitting unsung lines).
+        if isinstance(sung_info, dict) and sung_info.get("lines"):
+            docs = rec.get("documents") or {}
+            lyrics_text = (docs.get("lyrics") or {}).get("text") or (fallback_lyrics or "").strip()
+            all_lines = [
+                ln.strip() for ln in lyrics_text.splitlines()
+                if ln.strip() and not (ln.strip().startswith("[") and ln.strip().endswith("]"))
+            ]
+            if all_lines:
+                res = _build_sung_corrected_srt(sung_info["lines"], all_lines, resolve_mode=resolve_mode)
+                if res:
+                    return res
+
+        lines = first_t.get("lines") or (sung_info.get("lines") if isinstance(sung_info, dict) else None)
         if lines:
             res = _format_timing_lines_to_srt(lines, resolve_mode=resolve_mode)
             if res:

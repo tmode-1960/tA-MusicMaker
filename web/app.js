@@ -963,8 +963,33 @@ function persist() {
   }, 1000);
 }
 
+function uiConfirm(msg, { title, okText, danger = false } = {}) {
+  const dlg = $("#dlgConfirm");
+  if (!dlg) return Promise.resolve(window.confirm(msg));
+  $("#dlgConfirmTitle").textContent = title || "thomo.ART MusicMaker";
+  $("#dlgConfirmMsg").textContent = msg;
+  const btnOk = $("#dlgConfirmOk");
+  const btnCancel = $("#dlgConfirmCancel");
+  btnOk.textContent = okText || "OK";
+  btnOk.className = danger ? "danger" : "primary";
+  return new Promise((resolve) => {
+    const finish = (val) => {
+      dlg.removeEventListener("cancel", onCancel);
+      btnOk.onclick = null;
+      btnCancel.onclick = null;
+      if (dlg.open) dlg.close();
+      resolve(val);
+    };
+    const onCancel = (e) => { e.preventDefault(); finish(false); };
+    dlg.addEventListener("cancel", onCancel);
+    btnCancel.onclick = () => finish(false);
+    btnOk.onclick = () => finish(true);
+    dlg.showModal();
+  });
+}
+
 async function resetBriefing() {
-  if (!confirm(t("confirmResetBrief") || "Song-Briefing auf die Standardwerte zurücksetzen?")) return;
+  if (!(await uiConfirm(t("confirmResetBrief") || "Song-Briefing auf die Standardwerte zurücksetzen?", { okText: t("resetBrief") || "OK" }))) return;
   S.brief = { ...(S.defaults?.brief || {}) };
   buildForm();
   persist();
@@ -1601,13 +1626,28 @@ function mediaInto(parent, media, extra = {}) {
   const verBtns = [];
   if (audio.length > 1) {
     audio.forEach((track, idx) => {
-      let label = track.name;
-      if (track.name.includes("voice_swap") || track.name.startsWith("[")) {
-        label = `🎙️ ${t("trackVoiceSwap")}`;
-      } else if (track.name.includes("sr") || track.name.includes("refine") || track.name.includes("48k")) {
-        label = `✨ ${t("trackRefined")}`;
+      let label = track.label || track.name;
+      const nLower = (track.name || "").toLowerCase();
+      if (track.label) {
+        label = track.label;
+      } else if (nLower.includes("voice_swap") || (track.name && track.name.startsWith("["))) {
+        label = `🎙️ ${t("trackVoiceSwap") || "Custom Voice"}`;
+      } else if (nLower.includes("sr") || nLower.includes("refine") || nLower.includes("48k")) {
+        label = `✨ ${t("trackRefined") || "48 kHz Refined"}`;
+      } else if (nLower.includes("(vocals)") || nLower.endsWith("vocals.flac") || nLower.endsWith("vocals.wav")) {
+        label = `🎤 ${t("trackVocals") || "Vocals"}`;
+      } else if (nLower.includes("(drums)") || nLower.endsWith("drums.flac") || nLower.endsWith("drums.wav")) {
+        label = `🥁 ${t("trackDrums") || "Drums"}`;
+      } else if (nLower.includes("(bass)") || nLower.endsWith("bass.flac") || nLower.endsWith("bass.wav")) {
+        label = `🎸 ${t("trackBass") || "Bass"}`;
+      } else if (nLower.includes("(other)") || nLower.includes("(rest)") || nLower.endsWith("other.flac") || nLower.endsWith("other.wav")) {
+        label = `🎹 ${t("trackOther") || "Other"}`;
+      } else if (nLower.includes("(instrumental)") || nLower.endsWith("instrumental.flac")) {
+        label = `🎼 ${t("trackInstrumental") || "Instrumental"}`;
+      } else if (nLower.includes("(original)") || nLower.includes("(raw)")) {
+        label = `📼 ${t("trackRaw") || "Take (Raw)"}`;
       } else if (idx === 0) {
-        label = `🎵 ${t("trackOriginal")}`;
+        label = `🎵 ${t("trackMaster") || t("trackOriginal") || "Master"}`;
       }
       const b = el("button", "ver-btn" + (idx === 0 ? " active" : ""), label);
       b.onclick = () => {
@@ -2139,7 +2179,7 @@ function mediaInto(parent, media, extra = {}) {
     const songObj = extra.songData;
     const sTitle = extra.title || (songObj && songObj.title) || "";
     const promptMsg = t("newTakePrompt", { title: sTitle }) || `Neuen Take für „${sTitle}“ rendern?`;
-    if (!confirm(promptMsg)) return;
+    if (!(await uiConfirm(promptMsg, { okText: t("newTake") || "OK" }))) return;
     try {
       busy(true);
       $("#progress").hidden = false;
@@ -2227,9 +2267,8 @@ async function ensureFontLoaded(fontName) {
 
 async function initVideoSubtitleFonts() {
   const inpFont = $("#inpVideoSubtitleFont");
-  const datalist = $("#listVideoFonts");
   const preview = $("#videoFontPreview");
-  if (!inpFont || !datalist) return;
+  if (!inpFont) return;
 
   function updateFontPreview(fontName) {
     fontName = (fontName || "").trim();
@@ -2252,28 +2291,26 @@ async function initVideoSubtitleFonts() {
       window._systemFontsList = ["Impact", "Arial", "Segoe UI", "Tahoma", "Verdana", "Georgia", "Comic Sans MS", "Trebuchet MS", "Times New Roman"];
       window._defaultFont = "Impact";
     }
+  }
 
-    datalist.innerHTML = "";
+  if (inpFont.options.length === 0) {
+    inpFont.innerHTML = "";
     (window._systemFontsList || []).forEach((name) => {
       const opt = document.createElement("option");
       opt.value = name;
-      datalist.appendChild(opt);
+      opt.textContent = name;
+      inpFont.appendChild(opt);
     });
   }
 
   const savedFont = localStorage.getItem("tamusicmaker_video_font") || window._defaultFont || "Impact";
-  if (!inpFont.value) {
+  const hasSaved = Array.from(inpFont.options).some((o) => o.value === savedFont);
+  if (hasSaved) {
     inpFont.value = savedFont;
+  } else if (inpFont.options.length > 0) {
+    inpFont.value = inpFont.options[0].value;
   }
   updateFontPreview(inpFont.value);
-
-  inpFont.oninput = () => {
-    const val = inpFont.value.trim();
-    if (val) {
-      localStorage.setItem("tamusicmaker_video_font", val);
-      updateFontPreview(val);
-    }
-  };
 
   inpFont.onchange = () => {
     const val = inpFont.value.trim();
@@ -3542,7 +3579,7 @@ async function loadHistory() {
     const btnNewTake = el("button", "btn-new-take", "🎤 " + (t("newTake") || "Neuer Take"));
     btnNewTake.onclick = async () => {
       const promptMsg = t("newTakePrompt", { title }) || `Neuen Take für „${title}“ rendern?`;
-      if (!confirm(promptMsg)) return;
+      if (!(await uiConfirm(promptMsg, { okText: t("newTake") || "OK" }))) return;
       try {
         busy(true);
         $("#progress").hidden = false;
@@ -3559,7 +3596,7 @@ async function loadHistory() {
     const del = el("button", "ghost danger", t("del"));
     del.onclick = async () => {
       const msg = t("confirmDeleteSong") || "Diesen Song und alle zugehörigen Audiodateien unwiderruflich von der Festplatte löschen?";
-      if (!confirm(msg)) return;
+      if (!(await uiConfirm(msg, { okText: t("del") || "OK", danger: true }))) return;
       document.querySelectorAll("audio").forEach((a) => {
         try {
           a.pause();
@@ -3683,6 +3720,24 @@ function showTab(name) {
 }
 
 // ---------------------------------------------------------------- status / settings
+function updateLaunchButtonState(isOnline) {
+  const btn = $("#btnLaunchComfy");
+  if (!btn) return;
+  if (isOnline) {
+    btn.classList.remove("is-offline");
+    btn.classList.add("is-online");
+    btn.disabled = true;
+    btn.textContent = t("btnLaunchComfyRunning");
+    btn.title = t("btnLaunchComfyRunningTitle");
+  } else {
+    btn.classList.remove("is-online");
+    btn.classList.add("is-offline");
+    btn.disabled = false;
+    btn.textContent = t("btnLaunchComfy");
+    btn.title = t("btnLaunchComfyTitle");
+  }
+}
+
 async function refreshStatus() {
   try {
     const st = await api("/api/status"); S.status = st;
@@ -3692,19 +3747,29 @@ async function refreshStatus() {
     if (st.comfy) {
       if (st.plenio_version) {
         const pVer = String(st.plenio_version).trim();
-        if (pVer.startsWith("1.5")) {
-          text += ` · Plenio v${pVer}`;
-        } else {
-          text += ` · Plenio v${pVer} (1.5-ready)`;
-        }
+        text += ` · Plenio v${pVer}`;
       } else if (st.plenio_api) {
-        text += " · Plenio (1.5-ready)";
+        text += " · Plenio";
       }
     }
-    if (st.comfy && st.gpu) text += ` · ${st.gpu.replace(/^cuda:\d+\s*/, "")}` + (st.vram_total ? ` · ${(st.vram_free / 2 ** 30).toFixed(1)}/${(st.vram_total / 2 ** 30).toFixed(0)} ${t("gbFree")}` : "");
     if (!st.workflow) text += ` · ${t("wfMissing")}`;
     $("#statusText").textContent = text;
-    $("#btnStartComfy").hidden = st.comfy || !st.can_start;
+    const gpuEl = $("#gpuText");
+    if (gpuEl) {
+      if (st.comfy && st.gpu) {
+        const gpuName = st.gpu.replace(/^cuda:\d+\s*/, "");
+        const vramPart = st.vram_total
+          ? ` (${(st.vram_free / 2 ** 30).toFixed(1)}/${(st.vram_total / 2 ** 30).toFixed(0)} ${t("gbFree")})`
+          : (st.vram_free ? ` (${(st.vram_free / 2 ** 30).toFixed(1)} ${t("gbFree")})` : "");
+        gpuEl.textContent = `GPU: ${gpuName}${vramPart}`;
+      } else if (st.comfy) {
+        gpuEl.textContent = t("gpuConnected");
+      } else {
+        gpuEl.textContent = t("gpuOffline");
+      }
+    }
+    updateLaunchButtonState(st.comfy);
+    if ($("#plenio2Card")) $("#plenio2Card").hidden = !(st.comfy && st.plenio_api_v2);
     if (st.comfy && !S.options._live) {
       S.options = await api("/api/options").catch(() => ({}));
       if (Object.keys(S.options).length) {
@@ -3712,7 +3777,12 @@ async function refreshStatus() {
         populateSrModels();
       }
     }
-  } catch { $("#statusText").textContent = t("serverDown"); $("#status").className = "status bad"; }
+  } catch {
+    $("#statusText").textContent = t("serverDown");
+    $("#status").className = "status bad";
+    if ($("#gpuText")) $("#gpuText").textContent = t("gpuOffline");
+    updateLaunchButtonState(false);
+  }
 }
 
 function populateLangDropdown() {
@@ -3803,7 +3873,7 @@ async function toggleChangelog() {
   }
 }
 
-async function openSettings() {
+async function openSettings(opts = {}) {
   const c = await api("/api/config");
   populateLangDropdown();
   $("#cfgLang").value = c.language || LANG;
@@ -3811,6 +3881,12 @@ async function openSettings() {
   $("#cfgUrl").value = c.comfy_url; $("#cfgWorkflow").value = c.workflow; $("#cfgDir").value = c.comfy_dir; $("#cfgCmd").value = c.comfy_start_command;
   $("#cfgVoiceModelsDir").value = c.voice_models_dir || "";
   $("#settings").showModal();
+  if (opts.focusLaunchCmd && $("#cfgCmd")) {
+    setTimeout(() => {
+      $("#cfgCmd").focus();
+      $("#cfgCmd").select();
+    }, 60);
+  }
 }
 
 function setupTooltips() {
@@ -3972,7 +4048,27 @@ async function init() {
   $("#btnAuto").onclick = () => { ensureVoice(); startJob("/api/render", { ...base(), mode: "auto", count: Number($("#autoCount").value) || 1, sheet: sheetData(), sheet_states: { ...S.sheetState } }); };
   $("#btnCancel").onclick = () => S.job && api("/api/cancel", { id: S.job.id });
   $("#btnSettings").onclick = openSettings;
+  $("#btnBrowseCmd")?.addEventListener("click", async () => {
+    const btn = $("#btnBrowseCmd");
+    btn.disabled = true;
+    try {
+      const initial_dir = ($("#cfgCmd")?.value || "").trim() || ($("#cfgDir")?.value || "").trim();
+      const res = await api("/api/browse_start_cmd", { initial_dir });
+      if (res && res.path && $("#cfgCmd")) {
+        $("#cfgCmd").value = res.path;
+      }
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  });
   $("#btnToggleChangelog")?.addEventListener("click", toggleChangelog);
+  $("#btnCheckPlenioModels")?.addEventListener("click", checkPlenioModels);
+  $("#btnOpenEnhance")?.addEventListener("click", () => $("#dlgEnhanceMaster")?.showModal());
+  $("#btnOpenCover")?.addEventListener("click", () => $("#dlgAiCover")?.showModal());
+  $("#btnRunEnhance")?.addEventListener("click", runPlenioV2Enhance);
+  $("#btnRunCover")?.addEventListener("click", runPlenioV2Cover);
 
   $("#btnResetBrief")?.addEventListener("click", resetBriefing);
   $("#btnRefillTemplate")?.addEventListener("click", () => {
@@ -4016,9 +4112,229 @@ async function init() {
     refreshStatus();
     loadVoiceModels();
   };
-  $("#btnStartComfy").onclick = async () => { try { await api("/api/comfy/start", {}); toast(t("comfyStarting")); } catch (e) { toast(e.message, true); } };
-  loadHistory(); refreshStatus();
+  $("#btnLaunchComfy")?.addEventListener("click", async () => {
+    const btn = $("#btnLaunchComfy");
+    if (!S.status?.can_start) {
+      await openSettings({ focusLaunchCmd: true });
+      toast(t("launchCmdMissing"), true);
+      return;
+    }
+    btn.textContent = t("launchTerminalOpening");
+    btn.disabled = true;
+    try {
+      const res = await api("/api/comfy/start", {});
+      btn.textContent = res.terminal === "wt" ? t("launchTabOpened") : t("launchTerminalStarted");
+      toast(t("comfyStarting"));
+      let tries = 0;
+      const pollComfy = setInterval(async () => {
+        tries++;
+        try {
+          const st = await api("/api/status");
+          if (st && st.comfy) {
+            clearInterval(pollComfy);
+            await refreshStatus();
+            return;
+          }
+        } catch {}
+        if (tries > 60) {
+          clearInterval(pollComfy);
+          updateLaunchButtonState(false);
+        }
+      }, 2000);
+    } catch (e) {
+      updateLaunchButtonState(false);
+      toast(e.message, true);
+    }
+  });
+  if ($("#btnFixComfyAsr")) {
+    $("#btnFixComfyAsr").onclick = async () => {
+      const btn = $("#btnFixComfyAsr");
+      const st = $("#fixComfyAsrStatus");
+      btn.disabled = true;
+      if (st) st.textContent = t("fixComfyAsrRunning") || "Updating…";
+      try {
+        await api("/api/config", {
+          comfy_dir: $("#cfgDir").value.trim(),
+        });
+        const res = await api("/api/comfy/fix_transformers", {});
+        if (res?.ok) {
+          if (st) st.textContent = res.message || "OK";
+          toast(res.message || "OK");
+        } else {
+          const msg = res?.error || "Unknown error";
+          if (st) st.textContent = msg;
+          toast((t("fixComfyAsrErr") || "") + msg, true);
+        }
+      } catch (e) {
+        if (st) st.textContent = e.message;
+        toast(e.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    };
+  }
+  loadHistory(); refreshStatus(); loadPresets();
+  initSavedFileDialogHook();
   setInterval(refreshStatus, 6000);
   setInterval(() => fetch("/api/ping").catch(() => {}), 5000); fetch("/api/ping");
 }
+
+async function loadPresets() {
+  const bar = $("#presetBar");
+  if (!bar) return;
+  try {
+    const res = await api("/api/plenio/presets");
+    const presets = Array.isArray(res?.presets) ? res.presets : [];
+    if (!presets.length) return;
+    bar.innerHTML = "";
+    const icons = { sketch: "⚡", party: "🎉", full: "🎵", best: "💎", takes: "🎲", instrumental: "🎹" };
+    presets.forEach((p) => {
+      const btn = el("button", "mini ghost", `${icons[p.id] || "✨"} ${p.name}`);
+      btn.type = "button";
+      btn.title = p.text || p.name;
+      btn.onclick = () => applyPreset(p);
+      bar.append(btn);
+    });
+    bar.hidden = false;
+  } catch {}
+}
+
+function applyPreset(p) {
+  const f = p?.fields || {};
+  if (f.length !== undefined) S.brief.length = f.length;
+  if (f.vocals !== undefined) S.brief.vocals = f.vocals;
+  if (f.lyrics_fidelity !== undefined) S.brief.lyrics_fidelity = f.lyrics_fidelity;
+  if (f["finish.cover_art"] !== undefined && $("#optCover")) {
+    $("#optCover").checked = !!f["finish.cover_art"];
+  }
+  if (f["finish.hq_mastering"] !== undefined && $("#hqRegenEnabled")) {
+    $("#hqRegenEnabled").checked = !!f["finish.hq_mastering"];
+  }
+  buildForm();
+  saveLastSettings();
+  toast(`${t("presetApplied") || "Preset: "}${p.name}`);
+}
+
+async function checkPlenioModels() {
+  const box = $("#plenioModelsResult");
+  if (!box) return;
+  box.hidden = false;
+  box.textContent = t("modelCheckLoading") || "Checking…";
+  try {
+    const res = await api("/api/plenio/models");
+    if (!res?.supported || !Array.isArray(res.models)) {
+      box.textContent = t("modelCheckUnsupported") || "Requires ComfyUI with Plenio 1.6+.";
+      return;
+    }
+    box.innerHTML = "";
+    res.models.forEach((m) => {
+      const row = el("div", "");
+      row.style.cssText = "display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid var(--line)";
+      const gb = m.bytes ? ` (${(m.bytes / 1e9).toFixed(1)} GB)` : "";
+      const left = el("span", "", `${m.file || m.id}${gb}`);
+      left.title = `${m.role || ""}\nFolder: models/${m.folder || ""}`;
+      left.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+      const st = m.status === "installed" ? `✅ ${t("modelStatusInstalled") || "Installed"}`
+        : m.status === "missing" ? `⚠️ ${t("modelStatusMissing") || "Missing"}`
+        : `❌ ${t("modelStatusOther") || m.status}`;
+      const right = el("span", "", st);
+      right.style.cssText = "flex-shrink:0;font-weight:600";
+      row.append(left, right);
+      box.append(row);
+    });
+  } catch (e) {
+    box.textContent = e.message || "Error";
+  }
+}
+
+function readFileDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error("File read failed"));
+    r.readAsDataURL(file);
+  });
+}
+
+async function runPlenioV2Enhance() {
+  const file = $("#enhanceFile")?.files?.[0];
+  if (!file) { toast(t("selectAudioFirst") || "Please choose an audio file first.", true); return; }
+  const b64 = await readFileDataUrl(file);
+  $("#dlgEnhanceMaster")?.close();
+  await startJob("/api/plenio/v2/job", {
+    template: "enhance-master",
+    audio_name: file.name,
+    audio_b64: b64,
+    stems: !!$("#enhanceStems")?.checked,
+    fields: { "finish.hq_mastering": !!$("#enhanceHq")?.checked },
+  });
+}
+
+async function runPlenioV2Cover() {
+  const file = $("#coverFile")?.files?.[0];
+  if (!file) { toast(t("selectAudioFirst") || "Please choose an audio file first.", true); return; }
+  const b64 = await readFileDataUrl(file);
+  const fields = {
+    "finish.hq_mastering": !!$("#coverHq")?.checked,
+    "finish.cover_art": !!$("#coverArt")?.checked,
+    vocals: $("#coverVocals")?.value || "sung",
+    original_notes: Number($("#coverOrigNotes")?.value ?? 100),
+  };
+  const genre = $("#coverGenre")?.value?.trim();
+  const mood = $("#coverMood")?.value?.trim();
+  const desc = $("#coverDesc")?.value?.trim();
+  const lyrics = $("#coverLyrics")?.value?.trim();
+  if (genre) fields.genre = genre;
+  if (mood) fields.mood = mood;
+  if (desc) fields.description = desc;
+  if (lyrics) fields.lyrics = lyrics;
+  $("#dlgAiCover")?.close();
+  await startJob("/api/plenio/v2/job", {
+    template: "yue2-cover",
+    audio_name: file.name,
+    audio_b64: b64,
+    fields,
+  });
+}
+
+function initSavedFileDialogHook() {
+  const dlg = $("#dlgSavedFile");
+  if (!dlg) return;
+  let lastSeenTs = 0;
+  let pollTimer = null;
+
+  function showSavedModal(fullPath) {
+    const parts = fullPath.replace(/\//g, "\\").split("\\");
+    $("#dlgSavedFileName").textContent = parts[parts.length - 1] || fullPath;
+    $("#dlgSavedFilePath").textContent = fullPath;
+    $("#btnSavedOpen").onclick = async () => {
+      await api("/api/open_file", { path: fullPath }).catch(() => {});
+    };
+    $("#btnSavedReveal").onclick = async () => {
+      await api("/api/reveal_file", { path: fullPath }).catch(() => {});
+    };
+    if (!dlg.open) dlg.showModal();
+  }
+
+  document.addEventListener("click", (ev) => {
+    const a = ev.target?.closest?.("a[download], #btnDownloadVideo, #btnSaveVideoAction");
+    if (!a) return;
+    if (pollTimer) clearInterval(pollTimer);
+    let checks = 0;
+    pollTimer = setInterval(async () => {
+      checks++;
+      if (checks > 40) { clearInterval(pollTimer); pollTimer = null; return; }
+      try {
+        const res = await api("/api/last_saved");
+        if (res && res.path && res.ts && res.ts > lastSeenTs) {
+          lastSeenTs = res.ts;
+          clearInterval(pollTimer);
+          pollTimer = null;
+          showSavedModal(res.path);
+        }
+      } catch (_) {}
+    }, 350);
+  });
+}
+
 init();

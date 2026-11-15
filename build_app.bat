@@ -45,6 +45,7 @@ python -m PyInstaller --noconfirm --clean --onefile --noconsole ^
     --add-data "data\plenio_templates.json;data" ^
     --add-data "app.ico;." ^
     --add-data "version.txt;." ^
+    --add-data "wsl_vocal_align.py;." ^
     --add-data "Stimmaufnahme-Vorlage-RVC.pdf;." ^
     --collect-all faster_whisper ^
     --collect-all ctranslate2 ^

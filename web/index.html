@@ -3,17 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>thomo.ART MusicMaker v1.08 (Lantern House Edition)</title>
+<title>thomo.ART MusicMaker v1.32 (Lantern House Edition)</title>
 <link rel="icon" href="/favicon.ico">
-<link rel="stylesheet" href="/style.css?v=12">
+<link rel="stylesheet" href="/style.css?v=13">
 <script>try{const t=localStorage.getItem("tamusicmaker.theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 </head>
 <body>
 <header>
-  <div class="brand"><span class="logo">♪</span> <span class="brand-thomo">thomo.ART</span> <b class="brand-title">MusicMaker</b> <span class="brand-version" id="brandVersion">v1.08</span> <span class="edition">(Lantern House Edition)</span></div>
+  <div class="brand"><span class="logo">♪</span> <span class="brand-thomo">thomo.ART</span> <b class="brand-title">MusicMaker</b> <span class="brand-version" id="brandVersion">v1.32</span> <span class="edition">(Lantern House Edition)</span></div>
   <div class="status" id="status"><span class="dot"></span><span id="statusText" data-i18n="connecting"></span></div>
   <div class="spacer"></div>
-  <button class="ghost" id="btnStartComfy" data-i18n="startComfy" hidden></button>
+  <div class="hw-badge" id="hwBadge">
+    <span class="gpu-icon">⚡</span>
+    <span id="gpuText" data-i18n="gpuChecking">GPU: —</span>
+  </div>
+  <button class="btn-launch-comfy is-offline" id="btnLaunchComfy" data-i18n="btnLaunchComfy" data-i18n-title="btnLaunchComfyTitle">⚡ Launch ComfyUI</button>
   <button class="ghost" id="btnSettings" data-i18n="settings"></button>
 </header>
 
@@ -28,6 +32,17 @@
       <p class="hint" id="modeHint"></p>
     </div>
 
+    <div class="card" id="plenio2Card" hidden>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <h2 style="margin:0" data-i18n="plenio2ToolsTitle"></h2>
+        <span class="badge" style="font-size:10px;padding:2px 6px;border-radius:4px;background:var(--accent);color:#fff;font-weight:700">Plenio 2.0</span>
+      </div>
+      <div class="row" style="gap:8px">
+        <button type="button" id="btnOpenEnhance" class="ghost" style="flex:1" data-i18n="btnEnhanceMaster"></button>
+        <button type="button" id="btnOpenCover" class="ghost" style="flex:1" data-i18n="btnAiCover"></button>
+      </div>
+    </div>
+
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <h2 data-i18n="brief" style="margin:0"></h2>
@@ -36,6 +51,7 @@
           <button type="button" id="btnResetBrief" class="mini ghost" data-i18n="resetBrief" title="Song-Briefing auf Standard zurücksetzen" style="padding:2px 8px;font-size:11px;opacity:0.8">↺ Zurücksetzen</button>
         </div>
       </div>
+      <div id="presetBar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px" hidden></div>
       <div id="briefForm" class="form"></div>
     </div>
 
@@ -500,6 +516,59 @@
   <div class="bar"><div id="pBar"></div></div>
 </div>
 
+<dialog id="dlgEnhanceMaster">
+  <form method="dialog" novalidate>
+    <h2 data-i18n="enhanceTitle"></h2>
+    <p class="hint" data-i18n="enhanceHint" style="margin-bottom:10px"></p>
+    <label class="field"><span data-i18n="sourceAudioFile"></span>
+      <input type="file" id="enhanceFile" accept=".mp3,.flac,.wav,.ogg,.m4a,.opus,.aac,.aiff">
+    </label>
+    <label class="check" style="margin-top:8px"><input type="checkbox" id="enhanceHq" checked> <span data-i18n="enhanceHqLabel"></span></label>
+    <label class="check" style="margin-top:6px"><input type="checkbox" id="enhanceStems"> <span data-i18n="enhanceStemsLabel"></span></label>
+    <div class="actions" style="margin-top:14px">
+      <button value="cancel" class="ghost" data-i18n="cancel"></button>
+      <button type="button" id="btnRunEnhance" class="accent" data-i18n="btnRunEnhance"></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgAiCover">
+  <form method="dialog" novalidate>
+    <h2 data-i18n="coverTitle"></h2>
+    <p class="hint" data-i18n="coverHint" style="margin-bottom:10px"></p>
+    <label class="field"><span data-i18n="sourceAudioFile"></span>
+      <input type="file" id="coverFile" accept=".mp3,.flac,.wav,.ogg,.m4a,.opus,.aac,.aiff">
+    </label>
+    <div class="row" style="gap:8px">
+      <label class="field" style="flex:1"><span data-i18n="f_genre"></span><input id="coverGenre" placeholder="e.g. synthwave, acoustic folk"></label>
+      <label class="field" style="flex:1"><span data-i18n="f_mood"></span><input id="coverMood" placeholder="e.g. uplifting, melancholic"></label>
+    </div>
+    <label class="field"><span data-i18n="f_description"></span><input id="coverDesc" data-i18n-ph="coverDescPh"></label>
+    <div class="row" style="gap:8px">
+      <label class="field" style="flex:1"><span data-i18n="f_vocals"></span>
+        <select id="coverVocals">
+          <option value="sung">sung</option>
+          <option value="instrumental">instrumental</option>
+        </select>
+      </label>
+      <label class="field" style="flex:1"><span data-i18n="coverOrigNotes"></span>
+        <input type="number" id="coverOrigNotes" value="100" min="0" max="100" step="5">
+      </label>
+    </div>
+    <label class="field"><span data-i18n="coverLyricsOpt"></span>
+      <textarea id="coverLyrics" rows="4" data-i18n-ph="coverLyricsPh"></textarea>
+    </label>
+    <div class="row" style="gap:14px;margin-top:6px">
+      <label class="check"><input type="checkbox" id="coverHq" checked> <span data-i18n="enhanceHqLabel"></span></label>
+      <label class="check"><input type="checkbox" id="coverArt" checked> <span data-i18n="optCover"></span></label>
+    </div>
+    <div class="actions" style="margin-top:14px">
+      <button value="cancel" class="ghost" data-i18n="cancel"></button>
+      <button type="button" id="btnRunCover" class="accent" data-i18n="btnRunCover"></button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="dlgVoiceSwap">
   <form method="dialog">
     <h2 data-i18n="swapVoiceTitle"></h2>
@@ -634,8 +703,7 @@
     <label class="field" id="fieldVideoSubtitleFont">
       <span data-i18n="videoSubtitleFont"></span>
       <div style="position:relative;width:100%">
-        <input type="text" id="inpVideoSubtitleFont" list="listVideoFonts" autocomplete="off" placeholder="z. B. Impact oder Arial" style="width:100%">
-        <datalist id="listVideoFonts"></datalist>
+        <select id="inpVideoSubtitleFont" style="width:100%"></select>
       </div>
       <div id="videoFontPreview" style="margin-top:6px;padding:8px 12px;background:rgba(0,0,0,0.35);border:1px solid var(--line);border-radius:6px;font-size:16px;font-weight:bold;color:#ffffff;text-align:center;text-shadow:0 0 6px rgba(51,214,166,0.7), 0 2px 4px rgba(0,0,0,0.9);letter-spacing:0.5px" data-i18n="videoSubtitleFontPreview">
         ♫ Synchronisierte Lyrics Vorschau ♫
@@ -704,8 +772,17 @@
     <label class="field"><span data-i18n="cfgUrl"></span><input id="cfgUrl"></label>
     <label class="field"><span data-i18n="cfgWorkflow"></span><input id="cfgWorkflow"></label>
     <label class="field"><span data-i18n="cfgDir"></span><input id="cfgDir"></label>
-    <label class="field"><span data-i18n="cfgCmd"></span><input id="cfgCmd" data-i18n-ph="cfgCmdPh"></label>
+    <label class="field"><span data-i18n="cfgCmd"></span>
+      <div class="row" style="gap:6px">
+        <input id="cfgCmd" data-i18n-ph="cfgCmdPh" style="flex:1">
+        <button type="button" id="btnBrowseCmd" class="mini" data-i18n="btnBrowse" style="white-space:nowrap;padding:8px 12px"></button>
+      </div>
+    </label>
     <label class="field"><span data-i18n="cfgVoiceModelsDir"></span><input id="cfgVoiceModelsDir" data-i18n-ph="cfgVoiceModelsDirPh"></label>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
+      <button type="button" id="btnFixComfyAsr" class="mini" data-i18n="fixComfyAsr"></button>
+      <span id="fixComfyAsrStatus" class="hint" style="font-size:12px"></span>
+    </div>
 
     <div class="settings-addons-box" style="margin-top:14px;padding:12px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:8px">
       <div style="font-weight:700;font-size:13px;color:var(--text);margin-bottom:8px" data-i18n="addons"></div>
@@ -728,6 +805,14 @@
           </label>
         </div>
       </div>
+    </div>
+
+    <div class="settings-models-box" style="margin-top:14px;padding:12px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span style="font-weight:700;font-size:13px;color:var(--text)" data-i18n="modelCheckTitle"></span>
+        <button type="button" id="btnCheckPlenioModels" class="mini ghost" data-i18n="btnCheckModels"></button>
+      </div>
+      <div id="plenioModelsResult" style="margin-top:8px;font-size:12px;color:var(--mute);line-height:1.45" hidden></div>
     </div>
 
     <div class="settings-credits-box" style="margin-top:14px;padding:12px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:8px">
@@ -756,6 +841,30 @@
     </div>
 
     <div class="actions"><button value="cancel" class="ghost" data-i18n="cancel"></button><button id="cfgSave" value="ok" class="primary" data-i18n="save"></button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgConfirm" style="width:420px;max-width:92vw">
+  <form method="dialog">
+    <h2 id="dlgConfirmTitle" style="margin:0 0 8px;font-size:16px">thomo.ART MusicMaker</h2>
+    <p id="dlgConfirmMsg" style="margin:0 0 16px;font-size:13.5px;line-height:1.5;color:var(--text);white-space:pre-wrap"></p>
+    <div class="actions">
+      <button type="button" id="dlgConfirmCancel" class="ghost" data-i18n="cancel"></button>
+      <button type="button" id="dlgConfirmOk" class="primary">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgSavedFile" style="width:460px;max-width:92vw">
+  <form method="dialog">
+    <h2 style="margin:0 0 8px;font-size:16px" data-i18n="savedFileTitle"></h2>
+    <div id="dlgSavedFileName" style="font-weight:700;font-size:14px;color:var(--accent);margin-bottom:4px;word-break:break-word"></div>
+    <div id="dlgSavedFilePath" style="font-size:12px;color:var(--muted);margin-bottom:16px;word-break:break-all"></div>
+    <div class="actions" style="justify-content:flex-end;gap:8px;flex-wrap:wrap">
+      <button type="button" id="btnSavedReveal" class="ghost" data-i18n="savedFileReveal"></button>
+      <button type="button" id="btnSavedOpen" class="primary" data-i18n="savedFileOpen"></button>
+      <button value="cancel" class="ghost" data-i18n="close"></button>
+    </div>
   </form>
 </dialog>
 

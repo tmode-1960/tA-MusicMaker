@@ -77,8 +77,11 @@ def update_html(ver: str) -> None:
             f'<b class="brand-title">MusicMaker</b> <span class="brand-version" id="brandVersion">v{ver}</span>',
         )
 
-    with open(HTML_FILE, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(content)
+    try:
+        with open(HTML_FILE, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(content)
+    except PermissionError:
+        print(f"[WARNUNG] {HTML_FILE} ist derzeit von einem Prozess gesperrt. Versionsnummer im HTML wird beim naechsten Mal aktualisiert.")
 
 
 def update_iss(ver: str) -> None:

@@ -88,6 +88,60 @@ class ComfyClient:
     def plenio_from_record(self, record: dict) -> dict:
         return self._request("/plenio/api/v1/from-record", data=record, timeout=15)
 
+    def plenio_models(self) -> dict | None:
+        try:
+            res = self._request("/plenio/api/v1/models", timeout=5)
+            return res if isinstance(res, dict) else None
+        except ComfyError:
+            return None
+
+    def plenio_v2_info(self) -> dict | None:
+        try:
+            res = self._request("/plenio/api/v2", timeout=3)
+            return res if isinstance(res, dict) else None
+        except ComfyError:
+            return None
+
+    def plenio_presets(self) -> list[dict] | None:
+        try:
+            res = self._request("/plenio/api/v2/presets", timeout=5)
+            if isinstance(res, dict) and isinstance(res.get("presets"), list):
+                return res["presets"]
+            return None
+        except ComfyError:
+            return None
+
+    def plenio_v2_upload(self, filename: str, data: bytes) -> dict:
+        url = self.base_url + "/plenio/api/v2/uploads?name=" + urllib.parse.quote(filename)
+        req = urllib.request.Request(
+            url, data=data, headers={"Content-Type": "application/octet-stream"}, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as err:
+            detail = err.read().decode("utf-8", "replace")
+            raise ComfyError(f"Plenio upload HTTP {err.code}: {detail}") from err
+        except (urllib.error.URLError, socket.timeout, ConnectionError) as err:
+            raise ComfyError(f"ComfyUI unreachable: {err}") from err
+
+    def plenio_v2_create_job(self, job_data: dict) -> dict:
+        return self._request("/plenio/api/v2/jobs", data=job_data, timeout=30)
+
+    def plenio_v2_get_job(self, job_id: str) -> dict:
+        return self._request("/plenio/api/v2/jobs/" + urllib.parse.quote(str(job_id)), timeout=15)
+
+    def plenio_v2_cancel_job(self, job_id: str) -> None:
+        try:
+            self._request("/plenio/api/v2/jobs/" + urllib.parse.quote(str(job_id)), method="DELETE", timeout=10)
+        except Exception:
+            pass
+
+    def plenio_v2_download_file(self, job_id: str, filename: str) -> bytes:
+        path = f"/plenio/api/v2/jobs/{urllib.parse.quote(str(job_id))}/files/{urllib.parse.quote(str(filename))}"
+        payload, _ = self._request(path, raw=True, timeout=60)
+        return payload
+
     def object_info(self, node_class: str) -> dict:
         return self._request("/object_info/" + urllib.parse.quote(node_class), timeout=20)
 
@@ -101,7 +155,7 @@ class ComfyClient:
         return res["prompt_id"]
 
     def history(self, prompt_id: str) -> dict:
-        return self._request("/history/" + prompt_id, timeout=15).get(prompt_id, {})
+        return self._request("/history/" + prompt_id, timeout=30).get(prompt_id, {})
 
     def interrupt(self) -> None:
         self._request("/interrupt", {}, timeout=10)
@@ -124,6 +178,7 @@ class ComfyClient:
             prompt_id = self.queue_prompt(prompt)
             listener.prompt_id = prompt_id
             on_event({"type": "queued", "prompt_id": prompt_id})
+            consecutive_poll_errs = 0
             while True:
                 if should_cancel():
                     try:
@@ -131,7 +186,15 @@ class ComfyClient:
                     except ComfyError:
                         pass
                     raise ComfyError("Cancelled.")
-                entry = self.history(prompt_id)
+                try:
+                    entry = self.history(prompt_id)
+                    consecutive_poll_errs = 0
+                except ComfyError as err:
+                    consecutive_poll_errs += 1
+                    if consecutive_poll_errs >= 12:
+                        raise err
+                    time.sleep(2.0)
+                    continue
                 if entry:
                     status = (entry.get("status") or {})
                     if status.get("status_str") == "error":

@@ -7,6 +7,133 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [1.32] - 2026-11-15
+
+### English (Primary)
+- **Vocal-Isolated Forced Lyrics & Subtitle Alignment (`wsl_vocal_align.py`, `srt_translate.py`):**
+  - Added `wsl_vocal_align.py` (bundled in `build_app.bat`): WSL GPU vocal isolation (Demucs) combined with Qwen3-ASR and Qwen3-ForcedAligner for precise word- and line-level lyrics timing.
+  - Upgraded `srt_translate.py` with monotone Whisper anchor matching, Plenio Qwen3-ASR sung-segment correction (fixing misheard ASR words against written lyrics), embedded audio lyrics tag reading, and smooth cue extension until the next sentence.
+- **ComfyUI Launch, GPU Status & ASR Auto-Recovery:**
+  - Added live GPU hardware status indicator and a `⚡ Launch ComfyUI` button with Windows Terminal / WSL profile detection and a native file browser (`📁 Browse…`) for the ComfyUI start command.
+  - Added automatic fallback to standard fidelity when ComfyUI hits a `Best-Take / ASR` `@strict` dataclass error, plus a one-click **Fix ComfyUI Best-Take / ASR** (`transformers` update) action in Settings.
+- **File Saved Dialog & Build Resilience:**
+  - Added a `✅ File Saved` dialog with **Open File** and **Show in Folder** actions after exporting files.
+  - Hardened `bump_version.py` against temporary file locks on `web/index.html` during builds.
+
+### Deutsch
+- **Vokal-isolierte Untertitel- & Songtext-Synchronisation (`wsl_vocal_align.py`, `srt_translate.py`):**
+  - Neues Modul `wsl_vocal_align.py` (in `build_app.bat` gebündelt): WSL-GPU-Gesangsisolation (Demucs) kombiniert mit Qwen3-ASR und Qwen3-ForcedAligner für präzises Timing von Songtexten und Untertiteln.
+  - Erweiterung von `srt_translate.py` um monotones Whisper-Anker-Matching, Korrektur von Plenio-Qwen3-ASR-Segmenten anhand des geschriebenen Songtexts, Auslesen eingebetteter Lyrics-Tags und fließendes Verlängern der Untertitel-Cues bis zum nächsten Satz.
+- **ComfyUI-Start, GPU-Status & ASR-Fehlerbehebung:**
+  - Live-GPU-Statusanzeige und `⚡ ComfyUI starten`-Button inklusive Windows-Terminal-/WSL-Profil-Erkennung sowie nativem Dateiauswahl-Dialog (`📁 Durchsuchen…`) für den ComfyUI-Startbefehl.
+  - Automatischer Fallback auf Standard-Fidelity bei `Best-Take / ASR` `@strict`-Dataclass-Fehlern in ComfyUI sowie ein 1-Klick-Button **ComfyUI Textprüfung (ASR) reparieren** in den Einstellungen.
+- **Datei-gespeichert-Dialog & Build-Stabilität:**
+  - Neuer `✅ Datei gespeichert`-Dialog mit den Aktionen **Datei öffnen** und **Im Ordner anzeigen**.
+  - `bump_version.py` gegen kurzzeitige Dateisperren auf `web/index.html` beim Build abgesichert.
+
+---
+
+## [1.18] - 2026-11-14
+
+### English (Primary)
+- **Centered Styled Confirmation Dialogs:**
+  - Replaced all native browser `confirm()` popups (resetting song brief, rendering a new take, deleting a song) with a centered, theme-matched `<dialog id="dlgConfirm">` modal without the browser `127.0.0.1:8765` header.
+
+### Deutsch
+- **Zentrierte Bestätigungsdialoge im App-Design:**
+  - Alle nativen Browser-`confirm()`-Popups (Briefing zurücksetzen, Neuer Take, Song löschen) wurden durch ein mittig zentriertes Modal-Fenster (`#dlgConfirm`) im **thomo.ART**-Design ersetzt – ohne die störende `127.0.0.1:8765`-Kopfzeile.
+
+---
+
+## [1.17] - 2026-11-14
+
+### English (Primary)
+- **Hybrid Plenio 2.0 Studio Tools (`Enhance & Master` + `AI Cover`):**
+  - Added a dedicated **Studio Tools** card (automatically shown when connected to Plenio 2.0) while keeping the existing `YuE2 · Song` workflow, all Mastering & Refine controls, RVC Voice Swap, and Video Export 100% untouched.
+  - **Enhance & Master (`enhance-master`):** Upload any existing audio file (`.mp3`, `.flac`, `.wav`, `.ogg`, `.m4a`) to master and upscale it via Plenio 2.0's Audio HQ & UniverSR (48 kHz) pipeline with optional stem export.
+  - **AI Cover (`yue2-cover`):** Upload a source track and re-imagine it in a new genre, mood, vocals mode, `Original Notes` fidelity (0–100), and optional custom lyrics.
+  - Results are automatically saved into the local library and appear directly in the Player, History, and Video Export.
+  - Fully backward-compatible: automatically hidden for users on Plenio 1.5/1.6.
+
+### Deutsch
+- **Hybride Plenio 2.0 Studio-Werkzeuge (`Enhance & Master` + `AI Cover`):**
+  - Neue **Studio-Werkzeuge**-Karte (erscheint automatisch bei erkanntem Plenio 2.0), während der bestehende `YuE2 · Song`-Workflow, alle Mastering- & Refine-Regler, RVC Voice Swap und der Musikvideo-Export zu 100 % unverändert bleiben.
+  - **Enhance & Master (`enhance-master`):** Bestehende Audiodateien (`.mp3`, `.flac`, `.wav`, `.ogg`, `.m4a`) hochladen und direkt mit Audio HQ & UniverSR (48 kHz) sowie optionalem Stem-Export veredeln lassen.
+  - **AI Cover (`yue2-cover`):** Bestehenden Song hochladen und mit neuem Genre, Stimmung, Gesang/Instrumental, `Original-Noten`-Treue (0–100) und optionalem Text neu interpretieren lassen.
+  - Fertige Ergebnisse landen automatisch in der Mediathek (Player, Verlauf & Video-Export).
+  - Vollständig abwärtskompatibel: Bei Nutzern mit Plenio 1.5/1.6 wird die Karte automatisch ausgeblendet.
+
+---
+
+## [1.16] - 2026-11-14
+
+### English (Primary)
+- **Plenio 2.0 Quick-Presets:**
+  - Added 1-click Quick-Preset buttons (`Quick sketch`, `Party - fast`, `Full song`, `Best quality`, `Three takes`, `Instrumental`) above the Song Brief.
+  - Automatically fetches presets from Plenio 2.0's Song API v2 (`/plenio/api/v2/presets`) with built-in fallbacks for full compatibility with Plenio 1.5/1.6 installations.
+- **Plenio Model Check (Settings):**
+  - Added a live **Plenio Model Check** diagnostic in Settings (`/plenio/api/v1/models`) showing installed, missing, or size-mismatched models with sizes and target folders.
+  - Safely degrades with a friendly notice when connected to older Plenio versions (< 1.6) or when ComfyUI is offline.
+- **Plenio 2.0 API v2 Detection:**
+  - Added non-breaking `plenio_v2_info` detection in `comfy_client.py` and `server.py` while keeping all existing 1.x/2.0 song generation, RVC Voice Swap, and video export workflows untouched.
+
+### Deutsch
+- **Plenio 2.0 Schnell-Presets:**
+  - Neue 1-Klick-Preset-Buttons (*Quick sketch*, *Party - fast*, *Full song*, *Best quality*, *Three takes*, *Instrumental*) direkt im Song-Briefing.
+  - Werden bei Plenio 2.0 live über die Song API v2 geladen und funktionieren dank integriertem Fallback auch nahtlos für Nutzer mit Plenio 1.5/1.6.
+- **Plenio Modell-Diagnose (Einstellungen):**
+  - Neuer Bereich **Plenio Modell-Diagnose** in den Einstellungen, der über ComfyUI live prüft, welche Modelle installiert sind, fehlen oder eine abweichende Größe haben.
+  - Vollständig abwärtskompatibel (zeigt bei älteren Plenio-Versionen < 1.6 oder Offline-ComfyUI einen freundlichen Hinweis ohne Fehlermeldung).
+- **Plenio 2.0 API-v2-Erkennung:**
+  - Sichere Erkennung von Plenio 2.0 (`plenio_api_v2`) bei voller Beibehaltung aller bestehenden Song-, Voice-Swap- und Musikvideo-Funktionen.
+
+---
+
+## [1.15] - 2026-11-11
+
+### English (Primary)
+- **Status Bar Version Detection:**
+  - Removed outdated legacy `(1.5-ready)` suffix for modern Plenio releases.
+  - Correctly displays current Plenio versions (e.g. `Plenio v1.6.0`) directly in the status bar without misleading readiness markers.
+- **Plenio 1.6+ Stem Track Integration:**
+  - Automatic detection and unified grouping of all stems (`Vocals`, `Drums`, `Bass`, `Other/Rest`, `Instrumental`, and `Take Raw`) under a single song card in the Media/Player library.
+  - Individual stem playback switcher in the player with one-click direct stem audio downloading.
+  - Prevents redundant duplicate song entries when songs are rendered with stem separation enabled.
+
+### Deutsch
+- **Versionsanzeige in der Statusleiste:**
+  - Veralteten Zusatz `(1.5-ready)` für moderne Plenio-Versionen entfernt.
+  - Erkennt und zeigt installierte Plenio-Versionen (z. B. `Plenio v1.6.0`) nun sauber und ohne irreführende Vorbereitungs-Labels an.
+- **Plenio 1.6+ Stem-Spuren Integration:**
+  - Automatische Erkennung und saubere Gruppierung aller Einzelspuren (`Vocals`, `Drums`, `Bass`, `Other/Mix`, `Instrumental`, `Take Raw`) unter einer gemeinsamen Song-Karte in der Medien-/Player-Bibliothek.
+  - Direkte Spuren-Umschaltung im Player mit 1-Klick-Download für jede einzelne Stem-Audiodatei.
+  - Verhindert doppelte Song-Einträge in der Bibliothek, wenn Songs mit aktivierter Stem-Trennung generiert werden.
+
+---
+
+## [1.10] - 2026-11-09
+
+### English (Primary)
+- **Plenio 1.5.1 Workflow & Engine Upgrade:**
+  - Upgraded `YuE2-Song.json` to the official Plenio v1.5.1 release template.
+  - **Gemma 4 12B (auto) Writer:** Default writer choice set to `Gemma 4 12B (auto)`, delivering noticeably superior lyric generation, rhythmic cadence, song titles, and FLUX.2 cover art prompts with automatic fallback to ComfyUI's Gemma 4 text encoder if llama.cpp is absent.
+  - **GGUF Model Tracking:** Added model metadata and download tracking for quantized Gemma 4 12B GGUF models (`gemma-4-12B-it-qat-UD-Q4_K_XL.gguf` [6.7 GB] and `gemma-4-12b-it-Q6_K.gguf` [9.8 GB]) in `server.py`.
+  - **Vocal Stem Subtitle Alignment:** Default export subtitle timing (`lyrics_timing`) set to `"vocal stem"` for millisecond-exact lyrics alignment against isolated vocals.
+  - **Extended Custom Lyrics Tags:** Full support for detailed section tags up to 160 characters (e.g. `[Verse - Female Choir, Call and Response delivery]`), preserving all bracketed directions, repeat markers, and custom line breaks verbatim.
+  - **Dynamic Writer Fallback:** Added smart model resolution for `PlenioWriterChoice` ensuring seamless backward compatibility with existing ComfyUI setups on Plenio 1.5.0/1.4.1 (automatically selects `gemma4_e4b_it_fp8_scaled.safetensors` without errors).
+
+### Deutsch
+- **Plenio 1.5.1 Workflow & Engine Upgrade:**
+  - Aktualisierung von `YuE2-Song.json` auf das offizielle Plenio v1.5.1 Release-Template.
+  - **Gemma 4 12B (auto) Writer:** Neuer Standard-Writer `Gemma 4 12B (auto)` für deutlich stilsicherere, lyrisch anspruchsvollere Songtexte, treffendere Titel und stimmigere Cover-Prompts – bei unter 16 GB VRAM mit 6,7 GB sogar kleiner und speichereffizienter als das alte FP8-Modell, inklusive automatischem Fallback.
+  - **GGUF Modell-Registrierung:** Erfassung der neuen quantisierten Gemma 4 12B GGUF-Modelle in `server.py` (`UD-Q4_K_XL` und `Q6_K`).
+  - **Präzises Untertitel-Timing:** Standardmäßige Untertitelausrichtung (`lyrics_timing`) auf `"vocal stem"` für taktgenaue Textanzeige und Untertitelsynchronisation.
+  - **Lange Abschnitts-Tags & Formatierungs-Erhalt:** Unterstützung für ausführliche Abschnittstags bis zu 160 Zeichen sowie 1:1-Erhalt aller Regieanweisungen in Klammern und Zeilenumbrüche bei eigenen Texten.
+  - **Dynamische Writer-Abwärtskompatibilität:** Intelligente Modellauflösung für `PlenioWriterChoice`, die volle Abwärtskompatibilität zu bestehenden ComfyUI-Instanzen mit Plenio 1.5.0/1.4.1 garantiert (wählt automatisch `gemma4_e4b_it_fp8_scaled.safetensors` ohne Modellfehler).
+
+
+---
+
 ## [1.08] - 2026-11-02
 
 ### English (Primary)
